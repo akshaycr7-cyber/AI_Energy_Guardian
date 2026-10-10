@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Energy Guardian</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="brand"><span class="brand-mark brand-orb" aria-hidden="true"><span>ϟ</span></span><div><p>AI ENERGY</p><strong>Guardian</strong></div></div>
+      <nav>
+        <a class="nav-item active" href="#overview" aria-current="page"><span aria-hidden="true">⌂</span>Overview</a>
+        <a class="nav-item" href="#ai-insights"><span aria-hidden="true">✦</span>AI Insights</a>
+        <a class="nav-item" href="#energy-analytics"><span aria-hidden="true">◫</span>Energy Analytics</a>
+        <a class="nav-item" href="#device-status"><span aria-hidden="true">◉</span>Devices</a>
+        <a class="nav-item" href="#history"><span aria-hidden="true">◷</span>History</a>
+        <a class="nav-item" href="#settings"><span aria-hidden="true">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-stack">
+        <section class="sidebar-note" aria-label="Live system status"><span class="note-dot" aria-hidden="true"></span><p>System status</p><small id="sidebar-status">Checking API…</small><small id="data-source">Data source unavailable</small></section>
+        <section class="profile-card" aria-label="User profile status"><span class="profile-avatar" aria-hidden="true">◌</span><div><strong>No authenticated session</strong><small>Role unavailable</small></div></section>
+      </div>
+    </aside>
+    <div class="page">
+      <header class="topbar">
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">☰</span><span class="sr-only">Toggle navigation</span></button>
+        <div class="title-group"><p class="eyebrow">AI ENERGY GUARDIAN</p><h1>Intelligent classroom command center</h1><p class="subtitle">Live environmental monitoring and advisory energy intelligence.</p></div>
+        <div class="header-actions"><div class="update-meta"><span>Last successful update</span><time id="last-update">Awaiting data</time></div><span id="connection" class="badge" role="status">Checking API...</span><button id="refresh-top" class="header-refresh" type="button"><span aria-hidden="true">↻</span><span>Refresh</span></button></div>
+      </header>
+      <main id="overview">
+        <section class="notice" aria-labelledby="advisory-title"><div class="notice-icon" aria-hidden="true">✦</div><div><p id="advisory-title" class="notice-label">AI recommendation mode <span id="ai-mode">Awaiting sensor data</span></p><p>Recommendations are advisory only. This dashboard does not control appliances.</p></div></section>
+        <section class="status-bar" id="dashboard-status" aria-live="polite" data-state="loading"><span class="status-icon" aria-hidden="true"></span><span>Loading the latest dashboard data…</span></section>
+        <section class="metrics-grid" aria-label="Latest classroom reading">
+          <article class="metric-card"><span class="metric-icon" aria-hidden="true">◉</span><span class="metric-label">Occupancy</span><strong id="occupancy">—</strong><small>Measured / supplied</small></article>
+          <article class="metric-card"><span class="metric-icon" aria-hidden="true">⌁</span><span class="metric-label">Temperature</span><strong id="temperature">—</strong><small>Measured / supplied</small></article>
+          <article class="metric-card"><span class="metric-icon" aria-hidden="true">◒</span><span class="metric-label">Humidity</span><strong id="humidity">—</strong><small>Measured / supplied</small></article>
+          <article class="metric-card"><span class="metric-icon" aria-hidden="true">▣</span><span class="metric-label">Smart board</span><strong id="board">—</strong><small>Measured / supplied</small></article>
+        </section>
+        <section class="intelligence-center" id="ai-insights" aria-labelledby="intelligence-title">
+          <div class="intelligence-intro"><p class="panel-kicker">AI INTELLIGENCE CENTER</p><h2 id="intelligence-title">Classroom energy reasoning</h2><p>Live advisory output is based only on the latest recorded observation and the trained model.</p></div>
+          <div class="ai-core" aria-hidden="true"><span class="core-ring ring-one"></span><span class="core-ring ring-two"></span><span class="core-orb"><i></i></span><span class="core-spark spark-one"></span><span class="core-spark spark-two"></span></div>
+          <article class="panel prediction-panel"><div class="panel-heading"><div><p class="panel-kicker">MODEL OUTPUT</p><h2>Model predictions</h2></div><span class="panel-badge" id="model-status">Awaiting data</span></div><div class="prediction-list"><div class="pred"><span>Suggested fan count</span><strong id="fans">—</strong></div><div class="pred"><span>Suggested light count</span><strong id="lights">—</strong></div></div><p class="panel-copy">Predictions are estimates from the trained model, not measured appliance states.</p></article>
+          <article class="panel recommendation-panel"><div class="panel-heading"><div><p class="panel-kicker">AI RECOMMENDATION</p><h2>Recommended classroom state</h2></div><span class="panel-badge accent">Advisory</span></div><p class="recommendation" id="recommendation">No recommendation available.</p><dl class="recommendation-stats"><dt>Recommended fans</dt><dd id="recommended-fans">—</dd><dt>Recommended lights</dt><dd id="recommended-lights">—</dd></dl><div class="evidence-box"><span>Evidence from AI decision</span><p id="recommendation-evidence">No decision evidence available.</p></div></article>
+          <aside class="assistant-placeholder" aria-label="Future AI Energy Assistant"><span class="assistant-icon" aria-hidden="true">✧</span><div><p class="panel-kicker">FUTURE CAPABILITY</p><h2>AI Energy Assistant</h2><p>Read-only energy questions will appear here when the assistant is connected.</p><button type="button" disabled>Coming soon</button></div></aside>
+        </section>
+        <section class="panel data-panel" id="device-status"><div class="panel-heading"><div><p class="panel-kicker">DATA PROVENANCE</p><h2>Sensor-data status</h2></div><span class="panel-badge">Observed input</span></div><p id="sensor-status" class="sensor-status">No data received.</p><div class="power-note"><h3>Power / savings</h3><p>Unavailable until genuine electrical measurements exist. This dashboard does not estimate power, energy saved, or cost savings.</p></div></section>
+        <section class="panel history-panel" id="history" aria-labelledby="history-title"><div class="section-title"><div><p class="panel-kicker" id="energy-analytics">HOLOGRAPHIC ANALYTICS</p><h2 id="history-title">Environmental observation history</h2><p>Only values received through this running API process are shown.</p></div><button id="refresh" type="button"><span aria-hidden="true">↻</span> Refresh data</button></div><div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line temperature-line" aria-hidden="true"></i>Temperature (°C)</span><span><i class="legend-line humidity-line" aria-hidden="true"></i>Humidity (%)</span></div><figure class="chart-wrap" aria-labelledby="history-title chart-description"><canvas id="environment-chart" role="img" aria-label="Separate recent temperature and humidity plots">Your browser does not support the history chart.</canvas><figcaption id="chart-description">Temperature and humidity use separate plots and scales to preserve their units.</figcaption></figure><div id="history-list" class="history" aria-live="polite">Loading history…</div></section>
+      </main>
+    </div>
+  </div>
+  <template id="history-row"><article class="history-row"><time></time><span class="source"></span><span class="reading"></span><span class="prediction"></span></article></template>
+  <script src="app.js"></script>
+</body>
+</html>

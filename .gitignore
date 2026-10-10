@@ -1,0 +1,11 @@
+.env
+*.env
+service-account*.json
+*serviceAccount*.json
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright-cli/
+.venv/
+venv/
+ml/models/*.joblib

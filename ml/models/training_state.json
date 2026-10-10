@@ -1,0 +1,354 @@
+{
+    "model_version": "1.0.0",
+    "last_training_time_utc": "2026-10-09T08:16:39.223732+00:00",
+    "last_training_rows": 1130,
+    "dataset_path": "F:\\CLG\\Hackathon projs\\proj doing part of vs code\\AI_Energy_Guardian\\data\\source_dataset.xlsx",
+    "training_rows": 904,
+    "testing_rows": 226,
+    "sklearn_version": "1.9.1",
+    "metrics": {
+        "occupancy": {
+            "accuracy": 1.0,
+            "precision_weighted": 1.0,
+            "recall_weighted": 1.0,
+            "f1_weighted": 1.0,
+            "macro_f1": 1.0,
+            "labels": [
+                "Occupied",
+                "Partial"
+            ],
+            "confusion_matrix": [
+                [
+                    164,
+                    0
+                ],
+                [
+                    0,
+                    62
+                ]
+            ],
+            "classification_report": {
+                "Occupied": {
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f1-score": 1.0,
+                    "support": 164.0
+                },
+                "Partial": {
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f1-score": 1.0,
+                    "support": 62.0
+                },
+                "accuracy": 1.0,
+                "macro avg": {
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f1-score": 1.0,
+                    "support": 226.0
+                },
+                "weighted avg": {
+                    "precision": 1.0,
+                    "recall": 1.0,
+                    "f1-score": 1.0,
+                    "support": 226.0
+                }
+            },
+            "class_distribution_train": {
+                "Occupied": 653,
+                "Partial": 251
+            },
+            "class_distribution_test": {
+                "Occupied": 164,
+                "Partial": 62
+            },
+            "feature_importance": [
+                {
+                    "feature": "Lect_Break",
+                    "importance": 0.27593637894903594
+                },
+                {
+                    "feature": "Smart Board ON/OFF_OFF",
+                    "importance": 0.2530521957336336
+                },
+                {
+                    "feature": "Smart Board ON/OFF_ON",
+                    "importance": 0.24577360319755326
+                },
+                {
+                    "feature": "Hour",
+                    "importance": 0.11385804758228452
+                },
+                {
+                    "feature": "Minute",
+                    "importance": 0.03146329811878623
+                },
+                {
+                    "feature": "Temperature (C)",
+                    "importance": 0.020171164827566035
+                },
+                {
+                    "feature": "Lect_SOM",
+                    "importance": 0.015579428532101963
+                },
+                {
+                    "feature": "Lect_EM",
+                    "importance": 0.014608315313552092
+                },
+                {
+                    "feature": "Humidity (%)",
+                    "importance": 0.007836845977703233
+                },
+                {
+                    "feature": "Lect_OE-ES (Applied Mathematics)",
+                    "importance": 0.006203150227461481
+                },
+                {
+                    "feature": "Lect_UHV",
+                    "importance": 0.00407953677840855
+                },
+                {
+                    "feature": "Lect_BSE",
+                    "importance": 0.0038470758614909542
+                },
+                {
+                    "feature": "Lect_SOM Tut",
+                    "importance": 0.0028431247709377145
+                },
+                {
+                    "feature": "Weather Condition_Clear",
+                    "importance": 0.002307050833233056
+                },
+                {
+                    "feature": "Precipitation (mm)",
+                    "importance": 0.0009517719414578332
+                },
+                {
+                    "feature": "Cloud Cover (%)",
+                    "importance": 0.0006057761569321698
+                },
+                {
+                    "feature": "Weekday",
+                    "importance": 0.00048352536790098377
+                },
+                {
+                    "feature": "Month",
+                    "importance": 0.00020777330083192373
+                },
+                {
+                    "feature": "Weather Condition_Cloudy",
+                    "importance": 0.0001399173068833281
+                },
+                {
+                    "feature": "Weather Condition_Drizzle",
+                    "importance": 3.861315715665523e-05
+                },
+                {
+                    "feature": "Weather Condition_Rain",
+                    "importance": 1.3406065088757406e-05
+                }
+            ]
+        },
+        "fan_count": {
+            "mae": 0.05850604017418177,
+            "rmse": 0.2464429168070543,
+            "r2": 0.959323173497366,
+            "exact_count_accuracy": 0.9646017699115044,
+            "feature_importance": [
+                {
+                    "feature": "Lect_Break",
+                    "importance": 0.32701296009203085
+                },
+                {
+                    "feature": "Smart Board ON/OFF_OFF",
+                    "importance": 0.3112006754499329
+                },
+                {
+                    "feature": "Smart Board ON/OFF_ON",
+                    "importance": 0.2901193253215641
+                },
+                {
+                    "feature": "Weekday",
+                    "importance": 0.03582086535243232
+                },
+                {
+                    "feature": "Humidity (%)",
+                    "importance": 0.008285937360378047
+                },
+                {
+                    "feature": "Cloud Cover (%)",
+                    "importance": 0.007377668921289762
+                },
+                {
+                    "feature": "Temperature (C)",
+                    "importance": 0.007310542498437429
+                },
+                {
+                    "feature": "Precipitation (mm)",
+                    "importance": 0.00412581193593539
+                },
+                {
+                    "feature": "Month",
+                    "importance": 0.003788300046321526
+                },
+                {
+                    "feature": "Hour",
+                    "importance": 0.0012281400816817113
+                },
+                {
+                    "feature": "Lect_SOM",
+                    "importance": 0.0008517785164251485
+                },
+                {
+                    "feature": "Lect_EM",
+                    "importance": 0.000754674150195997
+                },
+                {
+                    "feature": "Weather Condition_Cloudy",
+                    "importance": 0.0004977009139480683
+                },
+                {
+                    "feature": "Lect_UHV",
+                    "importance": 0.00033600594172639403
+                },
+                {
+                    "feature": "Lect_OE-ES (Applied Mathematics)",
+                    "importance": 0.00033592887042881777
+                },
+                {
+                    "feature": "Lect_BSE",
+                    "importance": 0.0003232166307728752
+                },
+                {
+                    "feature": "Weather Condition_Drizzle",
+                    "importance": 0.00028874192660098465
+                },
+                {
+                    "feature": "Minute",
+                    "importance": 0.0001640023386817189
+                },
+                {
+                    "feature": "Lect_SOM Tut",
+                    "importance": 0.00010833123062809424
+                },
+                {
+                    "feature": "Weather Condition_Rain",
+                    "importance": 4.803450365337892e-05
+                },
+                {
+                    "feature": "Weather Condition_Clear",
+                    "importance": 2.1357916934344868e-05
+                }
+            ]
+        },
+        "light_count": {
+            "mae": 0.10234044458491368,
+            "rmse": 0.34245178911132895,
+            "r2": 0.95974700187184,
+            "exact_count_accuracy": 0.9424778761061947,
+            "feature_importance": [
+                {
+                    "feature": "Lect_Break",
+                    "importance": 0.2925068388020308
+                },
+                {
+                    "feature": "Smart Board ON/OFF_OFF",
+                    "importance": 0.27810877012161045
+                },
+                {
+                    "feature": "Smart Board ON/OFF_ON",
+                    "importance": 0.26000131680777117
+                },
+                {
+                    "feature": "Hour",
+                    "importance": 0.09421767394125526
+                },
+                {
+                    "feature": "Weekday",
+                    "importance": 0.019959951247487468
+                },
+                {
+                    "feature": "Cloud Cover (%)",
+                    "importance": 0.011912976698390565
+                },
+                {
+                    "feature": "Lect_OE-ES (Applied Mathematics)",
+                    "importance": 0.00812708672235689
+                },
+                {
+                    "feature": "Humidity (%)",
+                    "importance": 0.008090643631070295
+                },
+                {
+                    "feature": "Lect_BSE",
+                    "importance": 0.006200378106989246
+                },
+                {
+                    "feature": "Temperature (C)",
+                    "importance": 0.006004625383049019
+                },
+                {
+                    "feature": "Lect_EM",
+                    "importance": 0.0049505658392703855
+                },
+                {
+                    "feature": "Month",
+                    "importance": 0.004668376068737982
+                },
+                {
+                    "feature": "Precipitation (mm)",
+                    "importance": 0.004163193548985666
+                },
+                {
+                    "feature": "Lect_SOM",
+                    "importance": 0.0002469523359490139
+                },
+                {
+                    "feature": "Weather Condition_Drizzle",
+                    "importance": 0.00023168725468611874
+                },
+                {
+                    "feature": "Weather Condition_Cloudy",
+                    "importance": 0.00019379785828675723
+                },
+                {
+                    "feature": "Lect_UHV",
+                    "importance": 0.00018632058391368942
+                },
+                {
+                    "feature": "Lect_SOM Tut",
+                    "importance": 7.949595067132322e-05
+                },
+                {
+                    "feature": "Minute",
+                    "importance": 6.874034549893623e-05
+                },
+                {
+                    "feature": "Weather Condition_Clear",
+                    "importance": 6.529634275157878e-05
+                },
+                {
+                    "feature": "Weather Condition_Rain",
+                    "importance": 1.5312409237591343e-05
+                }
+            ]
+        }
+    },
+    "feature_names": [
+        "Lect",
+        "Smart Board ON/OFF",
+        "Weather Condition",
+        "Hour",
+        "Minute",
+        "Weekday",
+        "Month",
+        "Temperature (C)",
+        "Humidity (%)",
+        "Cloud Cover (%)",
+        "Precipitation (mm)"
+    ],
+    "dataset_hash": "7c8b77b5004157981379e20776f35ea924ab81248a989103c6542bd27ee13a35",
+    "model_path": "F:\\CLG\\Hackathon projs\\proj doing part of vs code\\AI_Energy_Guardian\\ml\\models\\energy_guardian_models_final.joblib",
+    "automatic_retraining_enabled": false,
+    "automatic_retraining_note": "This file records the initial final training. The production retraining service will update this state after each accepted candidate model."
+}
