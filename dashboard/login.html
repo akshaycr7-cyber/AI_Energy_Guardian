@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Energy Guardian — Command Center Login</title>
+  <meta name="description" content="Secure administrative and operator authentication for the AI Energy Guardian intelligent command center.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Dedicated Login View Styles */
+    .login-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 460px;
+      border: 1px solid rgba(138, 108, 255, 0.35);
+      border-radius: 20px;
+      background: linear-gradient(155deg, rgba(16, 18, 44, 0.88), rgba(8, 10, 26, 0.96));
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 35px rgba(111, 71, 244, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(20px);
+      padding: 34px 32px 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-box::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 15%;
+      right: 15%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--violet), var(--cyan), transparent);
+      box-shadow: 0 0 16px var(--cyan);
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .login-header .brand {
+      justify-content: center;
+      padding: 0 0 14px;
+    }
+
+    .login-header h1 {
+      margin: 4px 0 6px;
+      font-size: 1.55rem;
+      font-weight: 750;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+    }
+
+    .login-header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    /* AI Orb Hero Display in Login */
+    .login-orb-stage {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    .tab-pills {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      margin-bottom: 22px;
+      background: rgba(10, 12, 28, 0.7);
+      border: 1px solid rgba(138, 112, 255, 0.22);
+      border-radius: 10px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(90deg, rgba(113, 65, 221, 0.4), rgba(62, 228, 255, 0.15));
+      border-color: rgba(62, 228, 255, 0.5);
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(93, 70, 255, 0.25);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #c9c3ec;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: rgba(7, 9, 22, 0.85);
+      border: 1px solid rgba(138, 112, 255, 0.3);
+      border-radius: 10px;
+      color: #ffffff;
+      font: inherit;
+      font-size: 0.88rem;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(62, 228, 255, 0.2), 0 0 16px rgba(62, 228, 255, 0.15);
+      background: rgba(10, 13, 30, 0.95);
+    }
+
+    .toggle-pass {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      transition: color 0.2s;
+    }
+
+    .toggle-pass:hover {
+      color: var(--cyan);
+    }
+
+    .form-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      font-size: 0.78rem;
+    }
+
+    .remember-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .remember-label input[type="checkbox"] {
+      accent-color: var(--violet);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .forgot-link {
+      color: var(--cyan);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s, text-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .forgot-link:hover {
+      color: #ffffff;
+      text-shadow: var(--glow-cyan);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #874ef0, #2fbde8);
+      border: 1px solid rgba(143, 224, 255, 0.65);
+      border-radius: 10px;
+      color: #ffffff;
+      font: inherit;
+      font-size: 0.92rem;
+      font-weight: 750;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(90, 122, 255, 0.35);
+      transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      filter: brightness(1.15);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(91, 122, 255, 0.5);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      filter: grayscale(0.4);
+    }
+
+    /* Message Alert */
+    .alert {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert-error {
+      background: rgba(255, 94, 141, 0.16);
+      border: 1px solid rgba(255, 94, 141, 0.45);
+      color: #ff9cb9;
+      display: block;
+    }
+
+    .alert-success {
+      background: rgba(72, 245, 166, 0.16);
+      border: 1px solid rgba(72, 245, 166, 0.45);
+      color: #72f7be;
+      display: block;
+    }
+
+    /* Quick Demo Credentials Strip */
+    .demo-strip {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(138, 112, 255, 0.2);
+      text-align: center;
+    }
+
+    .demo-strip p {
+      margin: 0 0 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .demo-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .btn-demo {
+      background: rgba(20, 24, 52, 0.7);
+      border: 1px solid rgba(138, 112, 255, 0.3);
+      border-radius: 8px;
+      color: #cbd3f5;
+      font: inherit;
+      font-size: 0.72rem;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-demo:hover {
+      background: rgba(35, 42, 90, 0.85);
+      border-color: var(--cyan);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .btn-demo.admin-pill:hover {
+      border-color: var(--pink);
+      box-shadow: 0 0 12px rgba(244, 86, 198, 0.35);
+    }
+
+    .btn-demo.user-pill:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(62, 228, 255, 0.35);
+    }
+
+    .back-home {
+      display: block;
+      margin-top: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.76rem;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .back-home:hover {
+      color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box" role="main" aria-labelledby="login-title">
+      <div class="login-header">
+        <div class="brand">
+          <span class="brand-mark brand-orb" aria-hidden="true"><span>ϟ</span></span>
+          <div>
+            <p>AI ENERGY</p>
+            <strong>Guardian</strong>
+          </div>
+        </div>
+        <div class="login-orb-stage">
+          <div class="ai-core" aria-hidden="true">
+            <span class="core-ring ring-one"></span>
+            <span class="core-ring ring-two"></span>
+            <span class="core-orb"><i></i></span>
+            <span class="core-spark spark-one"></span>
+            <span class="core-spark spark-two"></span>
+          </div>
+        </div>
+        <h1 id="login-title">Command Access</h1>
+        <p id="login-subtitle">Authenticate to access live classroom intelligence and controls.</p>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="tab-pills" role="tablist">
+        <button class="tab-btn active" id="tab-login" role="tab" aria-selected="true" type="button">Sign In</button>
+        <button class="tab-btn" id="tab-register" role="tab" aria-selected="false" type="button">Create Account</button>
+      </div>
+
+      <!-- Alert Box -->
+      <div id="alert-box" class="alert" role="alert" aria-live="assertive"></div>
+
+      <!-- Authentication Form -->
+      <form id="auth-form" novalidate>
+        <div class="form-group">
+          <label for="email">Identity Email</label>
+          <div class="input-wrapper">
+            <input type="email" id="email" class="form-input" placeholder="operator@energyguardian.ai" required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Security Password</label>
+          <div class="input-wrapper">
+            <input type="password" id="password" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+            <button type="button" class="toggle-pass" id="btn-toggle-pass" aria-label="Toggle password visibility">
+              <span id="eye-icon">👁</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row" id="remember-row">
+          <label class="remember-label">
+            <input type="checkbox" id="remember-me">
+            <span>Remember session (30d)</span>
+          </label>
+          <a class="forgot-link" id="link-forgot" role="button" tabindex="0">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-submit">
+          <span id="submit-text">Enter Command Center</span>
+        </button>
+      </form>
+
+      <!-- Password Reset Sub-Form (Hidden by default) -->
+      <form id="reset-form" style="display: none;" novalidate>
+        <div class="form-group">
+          <label for="reset-email">Account Email</label>
+          <div class="input-wrapper">
+            <input type="email" id="reset-email" class="form-input" placeholder="operator@energyguardian.ai" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="reset-new-password">New Password (8+ characters)</label>
+          <div class="input-wrapper">
+            <input type="password" id="reset-new-password" class="form-input" placeholder="Min. 8 characters" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-submit" id="btn-reset-submit" style="margin-bottom: 10px;">
+          <span>Update Password & Sign In</span>
+        </button>
+        <button type="button" class="btn-demo" id="btn-cancel-reset" style="width: 100%;">
+          <span>Cancel & Return to Login</span>
+        </button>
+      </form>
+
+      <!-- Quick Hackathon Demo Credentials -->
+      <div class="demo-strip">
+        <p>⚡ Quick Access Roles</p>
+        <div class="demo-buttons" style="flex-wrap: wrap;">
+          <button type="button" class="btn-demo admin-pill" id="demo-admin">
+            <span>★ Admin</span>
+          </button>
+          <button type="button" class="btn-demo" id="demo-operator" style="border-color: rgba(62, 228, 255, 0.4);">
+            <span>⚡ Operator</span>
+          </button>
+          <button type="button" class="btn-demo user-pill" id="demo-student" style="border-color: rgba(72, 245, 166, 0.45); color: #8ffccb;">
+            <span>👤 Normal User (Occupant)</span>
+          </button>
+        </div>
+      </div>
+
+      <a href="/dashboard/" class="back-home">← Back to Overview Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    let isRegistering = false;
+    let isResetting = false;
+
+    function showAlert(message, type = "error") {
+      const box = $("alert-box");
+      box.textContent = message;
+      box.className = `alert alert-${type}`;
+      box.style.display = "block";
+    }
+
+    function clearAlert() {
+      const box = $("alert-box");
+      box.textContent = "";
+      box.style.display = "none";
+    }
+
+    function setSubmitting(loading) {
+      const btn = $("btn-submit");
+      btn.disabled = loading;
+      $("submit-text").textContent = loading
+        ? (isRegistering ? "Registering…" : "Authenticating…")
+        : (isRegistering ? "Create Operator Account" : "Enter Command Center");
+    }
+
+    // Toggle Password Visibility
+    $("btn-toggle-pass").addEventListener("click", () => {
+      const input = $("password");
+      if (input.type === "password") {
+        input.type = "text";
+        $("eye-icon").textContent = "✕";
+      } else {
+        input.type = "password";
+        $("eye-icon").textContent = "👁";
+      }
+    });
+
+    // Tab Switching
+    $("tab-login").addEventListener("click", () => {
+      isRegistering = false;
+      isResetting = false;
+      $("tab-login").classList.add("active");
+      $("tab-login").setAttribute("aria-selected", "true");
+      $("tab-register").classList.remove("active");
+      $("tab-register").setAttribute("aria-selected", "false");
+      $("login-title").textContent = "Command Access";
+      $("login-subtitle").textContent = "Authenticate to access live classroom intelligence and controls.";
+      $("submit-text").textContent = "Enter Command Center";
+      $("remember-row").style.display = "flex";
+      $("auth-form").style.display = "block";
+      $("reset-form").style.display = "none";
+      clearAlert();
+    });
+
+    $("tab-register").addEventListener("click", () => {
+      isRegistering = true;
+      isResetting = false;
+      $("tab-register").classList.add("active");
+      $("tab-register").setAttribute("aria-selected", "true");
+      $("tab-login").classList.remove("active");
+      $("tab-login").setAttribute("aria-selected", "false");
+      $("login-title").textContent = "Operator Enrollment";
+      $("login-subtitle").textContent = "Register a new standard operator account with the energy command center.";
+      $("submit-text").textContent = "Create Operator Account";
+      $("remember-row").style.display = "none";
+      $("auth-form").style.display = "block";
+      $("reset-form").style.display = "none";
+      clearAlert();
+    });
+
+    // Forgot Password Flow
+    $("link-forgot").addEventListener("click", () => {
+      isResetting = true;
+      $("auth-form").style.display = "none";
+      $("reset-form").style.display = "block";
+      $("login-title").textContent = "Reset Password";
+      $("login-subtitle").textContent = "Enter your identity email and choose a new secure password.";
+      $("reset-email").value = $("email").value;
+      clearAlert();
+    });
+
+    $("btn-cancel-reset").addEventListener("click", () => {
+      $("tab-login").click();
+    });
+
+    // Demo Fill Shortcuts
+    $("demo-admin").addEventListener("click", () => {
+      $("tab-login").click();
+      $("email").value = "admin@energyguardian.ai";
+      $("password").value = "AdminGuardian2026!";
+      clearAlert();
+      showAlert("Admin credentials loaded (Full system & user governance).", "success");
+    });
+
+    $("demo-operator").addEventListener("click", () => {
+      $("tab-login").click();
+      $("email").value = "operator@energyguardian.ai";
+      $("password").value = "OperatorGuardian2026!";
+      clearAlert();
+      showAlert("Operator credentials loaded (Facility telemetry & device management).", "success");
+    });
+
+    $("demo-student").addEventListener("click", () => {
+      $("tab-login").click();
+      $("email").value = "student@energyguardian.ai";
+      $("password").value = "StudentGuardian2026!";
+      clearAlert();
+      showAlert("Normal user credentials loaded (Classroom occupant / student comfort view).", "success");
+    });
+
+    // Form Submission
+    $("auth-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      clearAlert();
+
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const rememberMe = $("remember-me").checked;
+
+      if (!email || !password) {
+        showAlert("Both email and password are required.");
+        return;
+      }
+
+      setSubmitting(true);
+
+      const endpoint = isRegistering ? "/api/auth/register" : "/api/auth/login";
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, rememberMe }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || "Authentication request failed.");
+        }
+
+        // Store token safely in localStorage or sessionStorage based on rememberMe
+        const storage = rememberMe ? localStorage : sessionStorage;
+        // Clean old storage
+        localStorage.removeItem("guardian_auth_token");
+        sessionStorage.removeItem("guardian_auth_token");
+
+        storage.setItem("guardian_auth_token", data.token);
+        localStorage.setItem("guardian_user", JSON.stringify(data.user));
+
+        showAlert(`Welcome, ${data.user.email} (${data.user.role.toUpperCase()})! Redirecting…`, "success");
+
+        setTimeout(() => {
+          window.location.href = "/dashboard/";
+        }, 800);
+      } catch (err) {
+        showAlert(err.message, "error");
+      } finally {
+        setSubmitting(false);
+      }
+    });
+
+    // Password Reset Submission
+    $("reset-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      clearAlert();
+      const email = $("reset-email").value.trim();
+      const newPassword = $("reset-new-password").value;
+
+      if (!email || !newPassword) {
+        showAlert("Both email and new password are required.");
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        showAlert("New password must be at least 8 characters long.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, newPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Password reset failed.");
+
+        showAlert(data.message, "success");
+        setTimeout(() => {
+          $("tab-login").click();
+          $("email").value = email;
+          $("password").value = newPassword;
+        }, 1200);
+      } catch (err) {
+        showAlert(err.message, "error");
+      }
+    });
+  </script>
+</body>
+</html>

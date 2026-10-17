@@ -1,0 +1,8 @@
+{
+  "name": "AI Energy Guardian",
+  "description": "Intelligent classroom command center with live environmental monitoring and advisory energy intelligence.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

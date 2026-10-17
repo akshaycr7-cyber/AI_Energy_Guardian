@@ -4,54 +4,458 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI Energy Guardian</title>
+  <meta name="description" content="Intelligent classroom command center with live environmental monitoring and advisory energy intelligence.">
+  <meta property="og:title" content="AI Energy Guardian">
+  <meta property="og:description" content="Intelligent classroom command center with live environmental monitoring and advisory energy intelligence.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
-      <div class="brand"><span class="brand-mark brand-orb" aria-hidden="true"><span>ϟ</span></span><div><p>AI ENERGY</p><strong>Guardian</strong></div></div>
-      <nav>
-        <a class="nav-item active" href="#overview" aria-current="page"><span aria-hidden="true">⌂</span>Overview</a>
-        <a class="nav-item" href="#ai-insights"><span aria-hidden="true">✦</span>AI Insights</a>
-        <a class="nav-item" href="#energy-analytics"><span aria-hidden="true">◫</span>Energy Analytics</a>
-        <a class="nav-item" href="#device-status"><span aria-hidden="true">◉</span>Devices</a>
-        <a class="nav-item" href="#history"><span aria-hidden="true">◷</span>History</a>
-        <a class="nav-item" href="#settings"><span aria-hidden="true">⚙</span>Settings</a>
+      <div class="brand">
+        <span class="brand-mark brand-orb" aria-hidden="true"><span>ϟ</span></span>
+        <div><p>AI ENERGY</p><strong>Guardian</strong></div>
+      </div>
+      <nav id="sidebar-nav">
+        <a class="nav-item active" href="#overview" id="nav-telemetry" aria-current="page"><span aria-hidden="true">⌂</span>Classroom Telemetry</a>
+        <a class="nav-item" href="#rooms-section" id="nav-rooms"><span aria-hidden="true">🏢</span>Monitored Rooms</a>
+        <a class="nav-item" href="#ai-insights" id="nav-ai"><span aria-hidden="true">✦</span>AI Recommendations</a>
+        <a class="nav-item" href="#power-audit" id="nav-power"><span aria-hidden="true">◫</span>Power & Savings</a>
+        <a class="nav-item" href="#history" id="nav-history"><span aria-hidden="true">◷</span>Observation History</a>
+        <!-- Privileged Nav Links (Rendered dynamically based on server-verified role) -->
+        <a class="nav-item" href="#simulator-section" id="nav-simulator" style="display: none;"><span aria-hidden="true">⚡</span>Simulator Sandbox</a>
+        <a class="nav-item" href="#diagnostics-section" id="nav-diagnostics" style="display: none;"><span aria-hidden="true">◉</span>Hardware Diagnostics</a>
+        <a class="nav-item" href="#admin-panel" id="nav-admin" style="display: none;"><span aria-hidden="true">⚙</span>Admin Control</a>
       </nav>
       <div class="sidebar-stack">
-        <section class="sidebar-note" aria-label="Live system status"><span class="note-dot" aria-hidden="true"></span><p>System status</p><small id="sidebar-status">Checking API…</small><small id="data-source">Data source unavailable</small></section>
-        <section class="profile-card" aria-label="User profile status"><span class="profile-avatar" aria-hidden="true">◌</span><div><strong>No authenticated session</strong><small>Role unavailable</small></div></section>
+        <section class="sidebar-note" aria-label="System infrastructure status">
+          <span class="note-dot" id="sidebar-dot" aria-hidden="true"></span>
+          <p id="sidebar-status-title">System Status</p>
+          <small id="sidebar-status">API Server: Online</small>
+          <small id="sidebar-sensor-status">Sensors: Awaiting ESP32</small>
+          <small id="data-source">Mode: Awaiting Hardware</small>
+        </section>
+        <section class="profile-card" id="profile-card" aria-label="User profile status">
+          <span class="profile-avatar" id="profile-avatar" aria-hidden="true">◌</span>
+          <div style="flex: 1; min-width: 0;">
+            <strong id="profile-email" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">No authenticated session</strong>
+            <small id="profile-role">Classroom Occupant</small>
+          </div>
+          <button id="profile-action-btn" type="button" style="border: 1px solid rgba(138, 112, 255, 0.35); border-radius: 6px; background: rgba(30, 20, 60, 0.6); color: var(--cyan); font: inherit; font-size: 0.68rem; cursor: pointer; padding: 4px 8px; font-weight: 750;">Sign In</button>
+        </section>
       </div>
     </aside>
+
     <div class="page">
       <header class="topbar">
-        <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="sidebar" aria-expanded="false"><span aria-hidden="true">☰</span><span class="sr-only">Toggle navigation</span></button>
-        <div class="title-group"><p class="eyebrow">AI ENERGY GUARDIAN</p><h1>Intelligent classroom command center</h1><p class="subtitle">Live environmental monitoring and advisory energy intelligence.</p></div>
-        <div class="header-actions"><div class="update-meta"><span>Last successful update</span><time id="last-update">Awaiting data</time></div><span id="connection" class="badge" role="status">Checking API...</span><button id="refresh-top" class="header-refresh" type="button"><span aria-hidden="true">↻</span><span>Refresh</span></button></div>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="sidebar" aria-expanded="false">
+          <span aria-hidden="true">☰</span><span class="sr-only">Toggle navigation</span>
+        </button>
+        <div class="title-group">
+          <p class="eyebrow" id="topbar-role-badge">AI ENERGY GUARDIAN</p>
+          <h1 id="topbar-title">Classroom Command Center</h1>
+          <p class="subtitle" id="topbar-subtitle">Live environmental telemetry, ML forecasts, and advisory energy intelligence.</p>
+        </div>
+        <div class="header-actions">
+          <div class="update-meta">
+            <span>Last sync</span>
+            <time id="last-update">Awaiting data</time>
+          </div>
+          <!-- Distinct Backend Status vs Physical Sensor Status Badges -->
+          <span id="connection" class="badge" role="status" title="Backend server connection">Backend: Checking…</span>
+          <span id="sensor-connection" class="badge badge-sensor" role="status" title="Sensor hardware status">Sensors: Checking…</span>
+          <button id="refresh-top" class="header-refresh" type="button"><span aria-hidden="true">↻</span><span>Refresh</span></button>
+          <a id="header-auth-btn" href="/login" class="header-refresh" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #4f339b, #1b7396); border-color: rgba(62, 228, 255, 0.45);"><span aria-hidden="true">👤</span><span id="header-auth-text">Sign In</span></a>
+        </div>
       </header>
+
       <main id="overview">
-        <section class="notice" aria-labelledby="advisory-title"><div class="notice-icon" aria-hidden="true">✦</div><div><p id="advisory-title" class="notice-label">AI recommendation mode <span id="ai-mode">Awaiting sensor data</span></p><p>Recommendations are advisory only. This dashboard does not control appliances.</p></div></section>
-        <section class="status-bar" id="dashboard-status" aria-live="polite" data-state="loading"><span class="status-icon" aria-hidden="true"></span><span>Loading the latest dashboard data…</span></section>
-        <section class="metrics-grid" aria-label="Latest classroom reading">
-          <article class="metric-card"><span class="metric-icon" aria-hidden="true">◉</span><span class="metric-label">Occupancy</span><strong id="occupancy">—</strong><small>Measured / supplied</small></article>
-          <article class="metric-card"><span class="metric-icon" aria-hidden="true">⌁</span><span class="metric-label">Temperature</span><strong id="temperature">—</strong><small>Measured / supplied</small></article>
-          <article class="metric-card"><span class="metric-icon" aria-hidden="true">◒</span><span class="metric-label">Humidity</span><strong id="humidity">—</strong><small>Measured / supplied</small></article>
-          <article class="metric-card"><span class="metric-icon" aria-hidden="true">▣</span><span class="metric-label">Smart board</span><strong id="board">—</strong><small>Measured / supplied</small></article>
+        <!-- Admin Management Panel (Admins Only) -->
+        <section class="panel admin-panel" id="admin-panel" style="display: none; margin-bottom: 20px; border-color: rgba(244, 86, 198, 0.45); background: radial-gradient(circle at 100% 0, rgba(244, 86, 198, 0.12), transparent 45%), linear-gradient(145deg, rgba(22, 18, 50, 0.85), rgba(9, 11, 28, 0.94));" aria-labelledby="admin-title">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker" style="color: var(--pink); text-shadow: var(--glow-pink);">ADMINISTRATIVE CONSOLE</p>
+              <h2 id="admin-title">User Accounts, ML Governance & System Administration</h2>
+            </div>
+            <span class="panel-badge accent" style="border-color: rgba(244, 86, 198, 0.5); background: rgba(160, 40, 110, 0.25); color: #ffd6f0;">Admin Authority</span>
+          </div>
+          <p class="panel-copy">Manage operator credentials, assign roles, monitor ML data quality and predictions, inspect system audit logs, and configure security policies.</p>
+          <div id="admin-stats-bar" style="display: flex; gap: 14px; margin: 12px 0; font-size: 0.78rem; color: var(--ice); flex-wrap: wrap;"></div>
+
+          <div class="analytics-tabs" role="tablist" style="margin: 14px 0 10px;">
+            <button id="admin-tab-users" class="analytics-tab active" role="tab" type="button">User Accounts & Roles</button>
+            <button id="admin-tab-ml" class="analytics-tab" role="tab" type="button">ML Models & Data Quality</button>
+            <button id="admin-tab-audit" class="analytics-tab" role="tab" type="button">Audit Logs & Security</button>
+            <button id="admin-tab-settings" class="analytics-tab" role="tab" type="button">System Settings & Reports</button>
+          </div>
+
+          <div id="admin-tab-content-users" style="display: block;">
+            <div id="admin-users-list" style="margin-top: 10px; overflow-x: auto;">Loading accounts…</div>
+          </div>
+
+          <div id="admin-tab-content-ml" style="display: none; margin-top: 10px;">
+            <div id="admin-ml-content">Loading ML models and data quality metrics…</div>
+          </div>
+
+          <div id="admin-tab-content-audit" style="display: none; margin-top: 10px;">
+            <div id="admin-audit-content">Loading system audit logs…</div>
+          </div>
+
+          <div id="admin-tab-content-settings" style="display: none; margin-top: 10px;">
+            <div id="admin-settings-content">Loading system settings & reports…</div>
+          </div>
         </section>
+
+        <!-- Hardware Status Callout Banner (Role-tailored: simple message for Normal Users, technical diagnostics for Admin/Operator) -->
+        <section class="hardware-status-banner" id="hardware-status-banner" aria-labelledby="hw-title">
+          <div class="hw-icon" id="hw-icon" aria-hidden="true">📡</div>
+          <div class="hw-body">
+            <p class="hw-kicker" id="hw-kicker">HARDWARE SENSOR STATUS</p>
+            <h2 class="hw-title" id="hw-title">Sensors disconnected — live readings are currently unavailable.</h2>
+            <p class="hw-desc" id="hw-desc">Physical sensors are currently not connected. No live data is available.</p>
+            <div class="hw-meta-row" id="hw-meta-tech-row" style="display: none;">
+              <span id="hw-ingest-note">Device ID: <code id="hw-device-id">ESP32_LAB_CLASSROOM_01</code></span>
+              <span id="hw-last-physical-time">Last physical packet: None recorded</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Advisory Notice Banner -->
+        <section class="notice" aria-labelledby="advisory-title">
+          <div class="notice-icon" aria-hidden="true">✦</div>
+          <div>
+            <p id="advisory-title" class="notice-label">AI recommendation mode <span id="ai-mode">Awaiting sensor data</span></p>
+            <p>Recommendations are advisory only. This dashboard does not send direct electrical control commands to classroom appliances.</p>
+          </div>
+        </section>
+
+        <section class="status-bar" id="dashboard-status" aria-live="polite" data-state="loading">
+          <span class="status-icon" aria-hidden="true"></span>
+          <span>Loading telemetry…</span>
+        </section>
+
+        <!-- SECTION 1: Classroom Environmental Telemetry -->
+        <section class="panel" style="margin-bottom: 22px; padding: 20px 24px;">
+          <div class="panel-heading" style="margin-bottom: 16px;">
+            <div>
+              <p class="panel-kicker" id="telemetry-kicker">CLASSROOM TELEMETRY</p>
+              <h2 id="telemetry-title">Lab Classroom 101 Environmental Readings</h2>
+            </div>
+            <span class="panel-badge" id="live-provenance-badge">Awaiting Hardware</span>
+          </div>
+
+          <div class="metrics-grid" aria-label="Latest classroom reading">
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">◉</span>
+              <span class="metric-label">Occupancy</span>
+              <strong id="occupancy">—</strong>
+              <small id="occupancy-sub">Awaiting sensor connection</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">⌁</span>
+              <span class="metric-label">Temperature</span>
+              <strong id="temperature">—</strong>
+              <small id="temperature-sub">Awaiting sensor connection</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">◒</span>
+              <span class="metric-label">Humidity</span>
+              <strong id="humidity">—</strong>
+              <small id="humidity-sub">Awaiting sensor connection</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon" aria-hidden="true">▣</span>
+              <span class="metric-label">Smart board</span>
+              <strong id="board">—</strong>
+              <small id="board-sub">Awaiting sensor connection</small>
+            </article>
+          </div>
+          <p class="panel-copy" id="telemetry-notice" style="margin: 0; font-size: 0.74rem;">Note: Live measurements update only when verified payloads arrive from physical sensors. Disconnected hardware displays '—'.</p>
+        </section>
+
+        <!-- SECTION 1.5: Monitored Rooms Overview (Admin sees all, Operator/User sees assigned) -->
+        <section class="panel" id="rooms-section" style="margin-bottom: 22px; padding: 20px 24px;">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">FACILITY OVERVIEW</p>
+              <h2 id="rooms-title">Monitored Classrooms & Devices</h2>
+            </div>
+            <span class="panel-badge" id="rooms-scope-badge">Assigned Room</span>
+          </div>
+          <div class="room-grid" id="room-grid">Loading rooms…</div>
+        </section>
+
+        <!-- SECTION 2: Development & Testing Simulator Sandbox (Admins & Authorized Operators Only) -->
+        <section class="panel simulator-panel" id="simulator-section" style="display: none;">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker" style="color: var(--amber); text-shadow: 0 0 12px rgba(255, 190, 89, 0.45);">OPERATIONAL TESTING SANDBOX</p>
+              <h2>Sensor Simulator Sandbox</h2>
+            </div>
+            <span class="panel-badge" style="border-color: rgba(255, 190, 89, 0.5); background: rgba(45, 28, 12, 0.4); color: #ffe6ba;">SIMULATED DATA ONLY</span>
+          </div>
+
+          <div class="sim-warning-bar">
+            <span class="sim-warning-icon" aria-hidden="true">⚠️</span>
+            <span>SIMULATED DATA: Synthetic development context — not physical sensor measurements. Operator/Admin testing sandbox for verifying AI forecasts without physical sensors.</span>
+          </div>
+
+          <div class="sim-metrics-grid">
+            <div class="sim-metric-card">
+              <span class="sim-label">Simulated Occupancy</span>
+              <strong id="sim-occupancy">—</strong>
+              <small>Simulated count</small>
+            </div>
+            <div class="sim-metric-card">
+              <span class="sim-label">Simulated Temp</span>
+              <strong id="sim-temp">—</strong>
+              <small>Simulated °C</small>
+            </div>
+            <div class="sim-metric-card">
+              <span class="sim-label">Simulated Humidity</span>
+              <strong id="sim-humidity">—</strong>
+              <small>Simulated %</small>
+            </div>
+            <div class="sim-metric-card">
+              <span class="sim-label">Simulated Smart Board</span>
+              <strong id="sim-board">—</strong>
+              <small>Simulated state</small>
+            </div>
+          </div>
+
+          <div class="sim-controls-row">
+            <button id="btn-run-sim-step" type="button" class="sim-btn">⚡ Run 1 Simulator Step</button>
+            <button id="btn-toggle-sim-stream" type="button" class="sim-btn-outline">▶ Start Continuous Stream</button>
+            <span id="sim-stream-status" class="sim-status-pill">Stream: Inactive</span>
+            <span id="sim-last-time" class="sim-meta-time">Last simulated reading: None</span>
+          </div>
+        </section>
+
+        <!-- SECTION 2.5: Hardware Diagnostics (Admins & Operators Only) -->
+        <section class="panel diagnostics-panel" id="diagnostics-section" style="display: none; margin-bottom: 24px; padding: 20px 24px;">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker" style="color: var(--cyan);">HARDWARE DIAGNOSTICS & TROUBLESHOOTING</p>
+              <h2>Microcontroller Health & Telemetry Metrics</h2>
+            </div>
+            <span class="panel-badge accent" id="diag-auth-badge">Operator Privileges</span>
+          </div>
+          <p class="panel-copy">Connection health, stale duration, error logs, and hardware ingestion telemetry for authorized personnel.</p>
+          <div class="diag-grid">
+            <div class="diag-item">
+              <span class="diag-label">Hardware Connection</span>
+              <strong id="diag-conn-state">Disconnected</strong>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label">Configured Device ID</span>
+              <strong id="diag-device-id">ESP32_LAB_CLASSROOM_01</strong>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label">Last Valid Packet</span>
+              <strong id="diag-last-packet">None recorded</strong>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label">Stale Threshold</span>
+              <strong id="diag-stale-thresh">120 seconds</strong>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label">Stale Duration</span>
+              <strong id="diag-stale-dur">N/A</strong>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label">Storage Health</span>
+              <strong id="diag-storage">Process-local memory</strong>
+            </div>
+          </div>
+          <div class="diag-logs-box">
+            <div style="font-weight: 700; margin-bottom: 6px; color: var(--ice);">Recent Hardware Events & Sensor Logs:</div>
+            <div id="diag-logs-list">No hardware events recorded.</div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: AI Intelligence Center & Advisory Reasoning -->
         <section class="intelligence-center" id="ai-insights" aria-labelledby="intelligence-title">
-          <div class="intelligence-intro"><p class="panel-kicker">AI INTELLIGENCE CENTER</p><h2 id="intelligence-title">Classroom energy reasoning</h2><p>Live advisory output is based only on the latest recorded observation and the trained model.</p></div>
-          <div class="ai-core" aria-hidden="true"><span class="core-ring ring-one"></span><span class="core-ring ring-two"></span><span class="core-orb"><i></i></span><span class="core-spark spark-one"></span><span class="core-spark spark-two"></span></div>
-          <article class="panel prediction-panel"><div class="panel-heading"><div><p class="panel-kicker">MODEL OUTPUT</p><h2>Model predictions</h2></div><span class="panel-badge" id="model-status">Awaiting data</span></div><div class="prediction-list"><div class="pred"><span>Suggested fan count</span><strong id="fans">—</strong></div><div class="pred"><span>Suggested light count</span><strong id="lights">—</strong></div></div><p class="panel-copy">Predictions are estimates from the trained model, not measured appliance states.</p></article>
-          <article class="panel recommendation-panel"><div class="panel-heading"><div><p class="panel-kicker">AI RECOMMENDATION</p><h2>Recommended classroom state</h2></div><span class="panel-badge accent">Advisory</span></div><p class="recommendation" id="recommendation">No recommendation available.</p><dl class="recommendation-stats"><dt>Recommended fans</dt><dd id="recommended-fans">—</dd><dt>Recommended lights</dt><dd id="recommended-lights">—</dd></dl><div class="evidence-box"><span>Evidence from AI decision</span><p id="recommendation-evidence">No decision evidence available.</p></div></article>
-          <aside class="assistant-placeholder" aria-label="Future AI Energy Assistant"><span class="assistant-icon" aria-hidden="true">✧</span><div><p class="panel-kicker">FUTURE CAPABILITY</p><h2>AI Energy Assistant</h2><p>Read-only energy questions will appear here when the assistant is connected.</p><button type="button" disabled>Coming soon</button></div></aside>
+          <div class="intelligence-intro">
+            <p class="panel-kicker">AI INTELLIGENCE CENTER</p>
+            <h2 id="intelligence-title">Classroom Energy Reasoning</h2>
+            <p>Model predictions and advisory states are computed strictly from available input features using trained classifiers and regressors.</p>
+          </div>
+
+          <div class="ai-core" aria-hidden="true">
+            <span class="core-ring ring-one"></span>
+            <span class="core-ring ring-two"></span>
+            <span class="core-orb"><i></i></span>
+            <span class="core-spark spark-one"></span>
+            <span class="core-spark spark-two"></span>
+          </div>
+
+          <!-- Model Predictions Panel -->
+          <article class="panel prediction-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-kicker">MODEL OUTPUT · FORECAST</p>
+                <h2>Model Predictions</h2>
+              </div>
+              <span class="panel-badge" id="model-status">Awaiting Data</span>
+            </div>
+            <div class="prediction-list">
+              <div class="pred">
+                <span>Suggested fan count</span>
+                <strong id="fans">—</strong>
+              </div>
+              <div class="pred">
+                <span>Suggested light count</span>
+                <strong id="lights">—</strong>
+              </div>
+            </div>
+            <p class="panel-copy" id="model-explanation">Predictions are estimates from trained model v1.0.0, not measured appliance states.</p>
+          </article>
+
+          <!-- Advisory Recommendation Panel -->
+          <article class="panel recommendation-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-kicker">AI RECOMMENDATION</p>
+                <h2>Recommended Classroom State</h2>
+              </div>
+              <span class="panel-badge accent">Advisory Only</span>
+            </div>
+            <p class="recommendation" id="recommendation">No recommendation available.</p>
+            <dl class="recommendation-stats">
+              <dt>Recommended fans</dt>
+              <dd id="recommended-fans">—</dd>
+              <dt>Recommended lights</dt>
+              <dd id="recommended-lights">—</dd>
+            </dl>
+            <div class="evidence-box">
+              <span>Evidence from AI decision</span>
+              <p id="recommendation-evidence">No decision evidence available.</p>
+            </div>
+          </article>
+
+          <aside class="assistant-placeholder" aria-label="Future AI Energy Assistant">
+            <span class="assistant-icon" aria-hidden="true">✧</span>
+            <div>
+              <p class="panel-kicker">FUTURE CAPABILITY</p>
+              <h2>AI Energy Assistant</h2>
+              <p>Natural-language energy reasoning and classroom questions will be enabled when the speech/LLM agent is connected.</p>
+              <button type="button" disabled>Coming soon</button>
+            </div>
+          </aside>
         </section>
-        <section class="panel data-panel" id="device-status"><div class="panel-heading"><div><p class="panel-kicker">DATA PROVENANCE</p><h2>Sensor-data status</h2></div><span class="panel-badge">Observed input</span></div><p id="sensor-status" class="sensor-status">No data received.</p><div class="power-note"><h3>Power / savings</h3><p>Unavailable until genuine electrical measurements exist. This dashboard does not estimate power, energy saved, or cost savings.</p></div></section>
-        <section class="panel history-panel" id="history" aria-labelledby="history-title"><div class="section-title"><div><p class="panel-kicker" id="energy-analytics">HOLOGRAPHIC ANALYTICS</p><h2 id="history-title">Environmental observation history</h2><p>Only values received through this running API process are shown.</p></div><button id="refresh" type="button"><span aria-hidden="true">↻</span> Refresh data</button></div><div class="chart-legend" aria-label="Chart legend"><span><i class="legend-line temperature-line" aria-hidden="true"></i>Temperature (°C)</span><span><i class="legend-line humidity-line" aria-hidden="true"></i>Humidity (%)</span></div><figure class="chart-wrap" aria-labelledby="history-title chart-description"><canvas id="environment-chart" role="img" aria-label="Separate recent temperature and humidity plots">Your browser does not support the history chart.</canvas><figcaption id="chart-description">Temperature and humidity use separate plots and scales to preserve their units.</figcaption></figure><div id="history-list" class="history" aria-live="polite">Loading history…</div></section>
+
+        <!-- SECTION 4: Electrical Power & Energy Savings Audit -->
+        <section class="panel data-panel" id="power-audit">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">ELECTRICAL POWER & SAVINGS</p>
+              <h2>Power & Energy Measurement Audit</h2>
+            </div>
+            <span class="panel-badge">Hardware Meter Required</span>
+          </div>
+
+          <div class="power-audit-grid">
+            <div class="power-audit-card">
+              <span class="pac-label">Measured Electrical Power</span>
+              <strong id="audit-measured-power">0.0 W</strong>
+              <small>No hardware CT clamp meter connected</small>
+            </div>
+            <div class="power-audit-card">
+              <span class="pac-label">Actual Energy Saved</span>
+              <strong id="audit-energy-saved" style="color: var(--amber);">Unavailable</strong>
+              <small>Baseline consumption unmeasured</small>
+            </div>
+            <div class="power-audit-card">
+              <span class="pac-label">Financial Cost Saved</span>
+              <strong id="audit-cost-saved" style="color: var(--amber);">Unavailable</strong>
+              <small>Never fabricated without physical meter</small>
+            </div>
+          </div>
+
+          <div class="power-taxonomy-box">
+            <strong style="color: #ffffff; font-size: 0.82rem;">Transparent Energy Guardian Measurement Taxonomy</strong>
+            <p style="font-size: 0.74rem; color: var(--muted); margin: 4px 0 0;">AI Energy Guardian clearly distinguishes measured, forecast, calculated, and electrical power metrics:</p>
+            <div class="taxonomy-grid">
+              <div class="taxonomy-item">
+                <strong style="color: var(--cyan);">Measured (Hardware)</strong>
+                <p>Real-time physical telemetry transmitted by classroom ESP32 microcontroller.</p>
+              </div>
+              <div class="taxonomy-item">
+                <strong style="color: var(--violet);">Forecast (ML Model)</strong>
+                <p>Trained regression outputs predicting optimal fan and light counts.</p>
+              </div>
+              <div class="taxonomy-item">
+                <strong style="color: var(--green);">Advisory (Rule Engine)</strong>
+                <p>Rule-governed recommendations ensuring comfort and academic visibility.</p>
+              </div>
+              <div class="taxonomy-item">
+                <strong style="color: var(--muted);">Power (Electrical)</strong>
+                <p>Requires physical CT current transformer clamp. Never estimated or fabricated.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 5: Observation History & Analytics -->
+        <section class="panel history-panel" id="history" aria-labelledby="history-title">
+          <div class="section-title">
+            <div>
+              <p class="panel-kicker" id="energy-analytics">HISTORICAL OBSERVATIONS</p>
+              <h2 id="history-title">Observation History & Analytics</h2>
+              <p id="history-subtitle">View session telemetry and explore the calibrated baseline historical dataset.</p>
+            </div>
+            <button id="refresh" type="button"><span aria-hidden="true">↻</span> Refresh data</button>
+          </div>
+
+          <!-- History View Switcher Tabs -->
+          <div class="analytics-tabs" role="tablist">
+            <button id="tab-session-history" class="analytics-tab active" role="tab" aria-selected="true" type="button">
+              Session Telemetry (<span id="session-count">0</span>)
+            </button>
+            <button id="tab-dataset-history" class="analytics-tab" role="tab" aria-selected="false" type="button">
+              Historical Training Dataset (1,131 Records)
+            </button>
+            <span id="history-range-badge" class="history-range-chip">Range: Current API Session</span>
+          </div>
+
+          <div class="chart-legend" aria-label="Chart legend">
+            <span><i class="legend-line temperature-line" aria-hidden="true"></i>Temperature (°C)</span>
+            <span><i class="legend-line humidity-line" aria-hidden="true"></i>Humidity (%)</span>
+          </div>
+
+          <figure class="chart-wrap" aria-labelledby="history-title chart-description">
+            <canvas id="environment-chart" role="img" aria-label="Separate temperature and humidity plots">Your browser does not support the history chart.</canvas>
+            <figcaption id="chart-description">Separate scaled temperature and humidity plots preserve native physical units.</figcaption>
+          </figure>
+
+          <div id="history-list" class="history" aria-live="polite">Loading observation records…</div>
+        </section>
+
+        <!-- Hardware Data Provenance Section -->
+        <section class="panel data-panel" id="device-status" style="display: none;">
+          <div class="panel-heading">
+            <div>
+              <p class="panel-kicker">DATA PROVENANCE & CONNECTION</p>
+              <h2>Hardware Connection Audit</h2>
+            </div>
+            <span class="panel-badge">API Audit</span>
+          </div>
+          <p id="sensor-status" class="sensor-status">No data received.</p>
+        </section>
       </main>
     </div>
   </div>
-  <template id="history-row"><article class="history-row"><time></time><span class="source"></span><span class="reading"></span><span class="prediction"></span></article></template>
+
+  <template id="history-row">
+    <article class="history-row">
+      <time></time>
+      <span class="source"></span>
+      <span class="reading"></span>
+      <span class="prediction"></span>
+    </article>
+  </template>
+
   <script src="app.js"></script>
 </body>
 </html>
