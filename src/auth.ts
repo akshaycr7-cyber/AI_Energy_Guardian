@@ -35,7 +35,9 @@ export interface JWTPayload {
 }
 
 // Secret for signing JWTs
-const JWT_SECRET = process.env.JWT_SECRET || "ai_energy_guardian_secure_secret_key_2026";
+function getJwtSecret(): string {
+  return process.env.JWT_SECRET?.trim() || "ai_energy_guardian_secure_secret_key_2026";
+}
 const TOKEN_EXPIRY_SECONDS = 24 * 60 * 60; // 24 hours
 
 // Helper functions for base64url encoding
@@ -61,7 +63,7 @@ export function signToken(payload: Omit<JWTPayload, "iat" | "exp">, expiresInSec
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
 
-  const signature = createHmac("sha256", JWT_SECRET)
+  const signature = createHmac("sha256", getJwtSecret())
     .update(`${encodedHeader}.${encodedPayload}`)
     .digest();
   const encodedSignature = base64UrlEncode(signature);
@@ -75,7 +77,7 @@ export function verifyToken(token: string): JWTPayload | null {
     if (parts.length !== 3) return null;
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
-    const expectedSignature = createHmac("sha256", JWT_SECRET)
+    const expectedSignature = createHmac("sha256", getJwtSecret())
       .update(`${encodedHeader}.${encodedPayload}`)
       .digest();
     const expectedEncodedSignature = base64UrlEncode(expectedSignature);

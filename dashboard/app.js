@@ -19,6 +19,8 @@ let activeHistoryTab = "session"; // "session" | "dataset"
 let isRefreshing = false;
 let isContinuousSimActive = false;
 let currentUser = null; // null | { id, email, role, assignedRoom }
+let latestDiagnostics = null;
+let diagnosticsLoadState = "loading"; // "loading" | "ready" | "error"
 
 function setText(id, value) {
   const el = $(id);
@@ -78,7 +80,10 @@ function updateConnectionAndSensors(health, sensorHealth) {
   const isPrivileged = currentUser && (currentUser.role === "admin" || currentUser.role === "operator");
 
   const simBanner = $("sim-active-banner");
-  const isSimActive = isContinuousSimActive || (sensorHealth && sensorHealth.status === "simulated_only");
+  const isSimActive =
+    isContinuousSimActive ||
+    Boolean(sensorHealth?.simulationActive) ||
+    (sensorHealth && sensorHealth.status === "simulated_only");
   if (simBanner) {
     simBanner.style.display = isSimActive ? "block" : "none";
   }
@@ -93,6 +98,7 @@ function updateConnectionAndSensors(health, sensorHealth) {
   }
 
   const { physicalSensorConnected, status, lastPhysicalReadingTime, physicalAgeSeconds, configuredDeviceId, staleThresholdSeconds } = sensorHealth;
+  setText("diag-stale-thresh", `${staleThresholdSeconds || 30} seconds`);
 
   if (physicalSensorConnected) {
     // 1. LIVE PHYSICAL DATA
@@ -158,7 +164,7 @@ function updateConnectionAndSensors(health, sensorHealth) {
       sidebarDot.style.background = "var(--amber)";
       sidebarDot.style.boxShadow = "0 0 10px var(--amber)";
     }
-    setText("data-source", sensorHealth.totalSimulatedReadings > 0
+    setText("data-source", (sensorHealth.simulationActive || sensorHealth.totalSimulatedReadings > 0)
       ? "Mode: Simulation Active (Hardware Not Connected)"
       : "Mode: Awaiting Hardware Telemetry");
 
@@ -186,6 +192,56 @@ function updateConnectionAndSensors(health, sensorHealth) {
 
 // ----------------- Role-Based Diagnostics Update -----------------
 
+function resolveDiagnosticsStorageLabel(diagnostics, state = diagnosticsLoadState) {
+  if (state === "loading") {
+    return "Checking storage…";
+  }
+  if (state === "error" || !diagnostics || typeof diagnostics !== "object") {
+    return "Unavailable";
+  }
+  const rawMode = typeof diagnostics.storage_mode === "string"
+    ? diagnostics.storage_mode.trim().toLowerCase()
+    : "";
+  if (!rawMode) {
+    return "Unavailable";
+  }
+  if (rawMode === "supabase_postgresql") {
+    const dbDisconnected =
+      diagnostics.database_connected === false ||
+      diagnostics.admin_details?.database_health?.connected === false;
+    if (dbDisconnected) {
+      return "Supabase PostgreSQL (Unreachable)";
+    }
+    return "Supabase PostgreSQL";
+  }
+  if (rawMode === "in_memory_demo" || rawMode === "process_local" || rawMode === "in_memory") {
+    return "Process-local memory";
+  }
+  if (rawMode === "mock" || rawMode === "mock_storage") {
+    return "Mock storage";
+  }
+  return "Unavailable";
+}
+
+async function loadHardwareDiagnostics() {
+  if (!latestDiagnostics) {
+    diagnosticsLoadState = "loading";
+    setText("diag-storage", resolveDiagnosticsStorageLabel(null, "loading"));
+  }
+  try {
+    const data = await api("/api/diagnostics");
+    latestDiagnostics = data;
+    diagnosticsLoadState = "ready";
+    setText("diag-storage", resolveDiagnosticsStorageLabel(latestDiagnostics, "ready"));
+    return data;
+  } catch (_err) {
+    latestDiagnostics = null;
+    diagnosticsLoadState = "error";
+    setText("diag-storage", resolveDiagnosticsStorageLabel(null, "error"));
+    return null;
+  }
+}
+
 function updateDiagnosticsUI(sensorHealth) {
   setText("diag-conn-state", sensorHealth.physicalSensorConnected ? "Connected (Live)" : sensorHealth.status.toUpperCase());
   setText("diag-device-id", sensorHealth.configuredDeviceId || "ESP32_LAB_CLASSROOM_01");
@@ -194,7 +250,7 @@ function updateDiagnosticsUI(sensorHealth) {
     : "None recorded");
   setText("diag-stale-thresh", `${sensorHealth.staleThresholdSeconds} seconds`);
   setText("diag-stale-dur", sensorHealth.physicalAgeSeconds !== null ? `${sensorHealth.physicalAgeSeconds}s` : "N/A");
-  setText("diag-storage", history ? "Process-local memory" : "Active");
+  setText("diag-storage", resolveDiagnosticsStorageLabel(latestDiagnostics, diagnosticsLoadState));
 
   const logsEl = $("diag-logs-list");
   if (logsEl && sensorHealth.sensorErrors) {
@@ -704,9 +760,11 @@ async function refresh() {
   setDashboardStatus("Synchronizing command center telemetry…", "loading");
 
   try {
+    const isPrivileged = Boolean(currentUser && (currentUser.role === "admin" || currentUser.role === "operator"));
     const [health, historyData] = await Promise.all([
       api("/health").catch(() => null),
       api("/history?limit=30").catch(() => null),
+      isPrivileged ? loadHardwareDiagnostics() : Promise.resolve(null),
     ]);
 
     const sensorHealth = health?.sensor_health || null;
@@ -807,11 +865,15 @@ function renderHistoryList(items, type = "session") {
 
     if (type === "session") {
       const src = (item.reading?.data_source || "manual").toLowerCase();
+      const isHistorical = Boolean(item.sensor_data_status?.isHistorical);
       const timeStr = new Date(item.timestamp).toLocaleTimeString();
       if (timeEl) timeEl.textContent = timeStr;
 
       if (sourceEl) {
-        if (src === "esp32") {
+        if (isHistorical) {
+          sourceEl.textContent = src === "simulated" ? "Historical (Simulated)" : "Historical (Saved)";
+          sourceEl.className = "source source-imported";
+        } else if (src === "esp32") {
           sourceEl.textContent = isPrivileged ? "ESP32 (Hardware)" : "Classroom Sensor";
           sourceEl.className = "source source-esp32";
         } else if (src === "simulated") {
@@ -860,7 +922,7 @@ function renderHistoryList(items, type = "session") {
 async function runSimulatorStep() {
   const token = getStoredToken();
   if (!token) {
-    alert("Operator or Administrator authentication required to run simulator.");
+    setDashboardStatus("Operator or Administrator authentication required to run simulator.", "error");
     return;
   }
   setDashboardStatus("Executing simulator step…", "loading");
@@ -875,7 +937,7 @@ async function runSimulatorStep() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(`Simulator error: ${err.detail || "Permission denied"}`);
+      setDashboardStatus(`Simulator error: ${err.detail || "Permission denied"}`, "error");
       return;
     }
     await refresh();
@@ -887,7 +949,7 @@ async function runSimulatorStep() {
 async function toggleContinuousSimulator() {
   const token = getStoredToken();
   if (!token) {
-    alert("Operator or Administrator authentication required to toggle simulator.");
+    setDashboardStatus("Operator or Administrator authentication required to toggle simulator.", "error");
     return;
   }
   isContinuousSimActive = !isContinuousSimActive;
@@ -900,6 +962,12 @@ async function toggleContinuousSimulator() {
       },
       body: JSON.stringify({ enabled: isContinuousSimActive })
     });
+    if (!res.ok) {
+      isContinuousSimActive = !isContinuousSimActive;
+      const err = await res.json().catch(() => ({}));
+      setDashboardStatus(`Simulator error: ${err.detail || "Permission denied"}`, "error");
+      return;
+    }
     const pill = $("sim-stream-status");
     const btn = $("btn-toggle-sim-stream");
     if (pill) {
@@ -918,12 +986,20 @@ async function toggleContinuousSimulator() {
 // ----------------- Authentication & Role Management -----------------
 
 function getStoredToken() {
-  return localStorage.getItem("aieg_auth_token") || sessionStorage.getItem("aieg_auth_token");
+  return (
+    localStorage.getItem("aieg_auth_token") ||
+    sessionStorage.getItem("aieg_auth_token") ||
+    localStorage.getItem("guardian_auth_token") ||
+    sessionStorage.getItem("guardian_auth_token")
+  );
 }
 
 function clearStoredToken() {
   localStorage.removeItem("aieg_auth_token");
   sessionStorage.removeItem("aieg_auth_token");
+  localStorage.removeItem("guardian_auth_token");
+  sessionStorage.removeItem("guardian_auth_token");
+  localStorage.removeItem("guardian_user");
 }
 
 async function checkAuthSession() {
@@ -948,6 +1024,9 @@ async function checkAuthSession() {
     currentUser = data.user;
     updateProfileUI(currentUser);
     loadMonitoredRooms();
+    if (currentUser && (currentUser.role === "admin" || currentUser.role === "operator")) {
+      loadHardwareDiagnostics();
+    }
     if (currentUser && currentUser.role === "admin") {
       loadAdminUsers();
       loadAdminStats();
@@ -1038,6 +1117,9 @@ function updateProfileUI(user) {
     }
   } else {
     currentUser = null;
+    latestDiagnostics = null;
+    diagnosticsLoadState = "loading";
+    setText("diag-storage", resolveDiagnosticsStorageLabel(null, "loading"));
     if (emailEl) emailEl.textContent = "No authenticated session";
     if (roleEl) roleEl.textContent = "Classroom Occupant";
     if (avatarEl) {
@@ -1187,7 +1269,7 @@ function renderAdminUsers(users) {
             loadAdminUsers();
             loadAdminStats();
           } else {
-            alert("Failed to update role: Permission denied or invalid request.");
+            setDashboardStatus("Failed to update role: Permission denied or invalid request.", "error");
             loadAdminUsers();
           }
         } finally {
@@ -1444,7 +1526,7 @@ async function saveWattageConfig(updates) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(`Could not save wattage config: ${err.detail || "Error"}`);
+      setDashboardStatus(`Could not save wattage config: ${err.detail || "Error"}`, "error");
       return;
     }
     const data = await res.json();
@@ -1452,7 +1534,7 @@ async function saveWattageConfig(updates) {
     updatePresetButtons(currentWattageConfig.fan_watts, currentWattageConfig.light_watts);
     await refresh();
   } catch (err) {
-    alert(`Failed to save wattage config: ${err.message}`);
+    setDashboardStatus(`Failed to save wattage config: ${err.message}`, "error");
   }
 }
 
@@ -1636,7 +1718,7 @@ function initRecommendationTester() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(`Validation error: ${err.detail || "Invalid input"}`);
+        setDashboardStatus(`Validation error: ${err.detail || "Invalid input"}`, "error");
         return;
       }
 
@@ -1653,7 +1735,7 @@ function initRecommendationTester() {
       setText("test-result-saved", `${data.power_breakdown.power_saved_w} W (-${data.power_breakdown.savings_percentage}%)`);
       setText("test-result-cost", `₹${data.power_breakdown.monthly_cost_saved.toFixed(2)} / mo`);
     } catch (err) {
-      alert(`Testing error: ${err.message}`);
+      setDashboardStatus(`Testing error: ${err.message}`, "error");
     }
   });
 }

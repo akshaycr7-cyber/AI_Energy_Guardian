@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   validateReadingInput,
@@ -49,6 +50,7 @@ import {
 } from "./src/auth.js";
 import {
   isSupabaseConfigured,
+  isAutomatedTestEnv,
   getStorageName,
   getStorageMode,
   checkSupabaseHealth,
@@ -58,6 +60,9 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = fs.existsSync(path.join(__dirname, "dashboard"))
+  ? __dirname
+  : path.resolve(__dirname, "..");
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -67,7 +72,7 @@ app.use(cors());
 app.use(express.json());
 
 // Public static dashboard
-const dashboardDir = path.join(__dirname, "dashboard");
+const dashboardDir = path.join(rootDir, "dashboard");
 app.use("/dashboard", express.static(dashboardDir));
 app.use(express.static(dashboardDir));
 
@@ -332,7 +337,7 @@ app.get("/api/admin/ml-status", requireAdmin, (_req: AuthenticatedRequest, res: 
       "Missing Feature Guard: When required inputs (occupancy) are absent, status is flagged 'insufficient_data' instead of fabricating numbers",
       "Sensor Plausibility Clamping: Temperature bounds [15°C - 45°C], Humidity bounds [10% - 100%]",
       "Power Integrity Guard: Electrical power savings are never estimated or fabricated without physical CT clamp meter",
-      "Stale Data Invalidation: Telemetry automatically transitioned to stale after 120s inactivity",
+      `Stale Data Invalidation: Telemetry automatically transitioned to stale after ${sensorHealth.staleThresholdSeconds}s inactivity`,
     ],
     prediction_telemetry: {
       total_predictions_stored: sensorHealth.totalRecords,
@@ -362,10 +367,7 @@ app.get("/api/admin/settings", requireAdmin, async (_req: AuthenticatedRequest, 
 app.patch("/api/admin/settings", requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   const { stale_threshold_seconds } = req.body || {};
   if (stale_threshold_seconds !== undefined) {
-    const parsed = parseInt(String(stale_threshold_seconds), 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      history.setStaleThreshold(parsed);
-    }
+    history.setStaleThreshold(stale_threshold_seconds);
   }
   res.json({
     message: "Settings updated successfully.",
@@ -375,8 +377,9 @@ app.patch("/api/admin/settings", requireAdmin, (req: AuthenticatedRequest, res: 
 });
 
 // GET /api/diagnostics - Role-filtered hardware diagnostics
-app.get("/api/diagnostics", requireOperatorOrAdmin, (req: AuthenticatedRequest, res: Response) => {
+app.get("/api/diagnostics", requireOperatorOrAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const sensorHealth = history.getSensorHealth();
+  const dbHealth = isSupabaseConfigured() ? await checkSupabaseHealth() : getLastSupabaseHealth();
   const isAdmin = req.user?.role === "admin";
 
   const diagnosticsData: any = {
@@ -390,6 +393,7 @@ app.get("/api/diagnostics", requireOperatorOrAdmin, (req: AuthenticatedRequest, 
     staleThresholdSeconds: sensorHealth.staleThresholdSeconds,
     sensorErrors: sensorHealth.sensorErrors,
     storage_mode: history.storageMode,
+    database_connected: dbHealth.connected,
   };
 
   if (isAdmin) {
@@ -398,7 +402,7 @@ app.get("/api/diagnostics", requireOperatorOrAdmin, (req: AuthenticatedRequest, 
       storage_engine: history.storageName,
       storage_mode: history.storageMode,
       database_configured: isSupabaseConfigured(),
-      database_health: getLastSupabaseHealth(),
+      database_health: dbHealth,
       total_physical_packets: sensorHealth.totalPhysicalReadings,
       total_simulated_packets: sensorHealth.totalSimulatedReadings,
       memory_records: sensorHealth.totalRecords,
@@ -503,7 +507,7 @@ app.get("/history", (req: Request, res: Response) => {
 // Historical calibrated dataset endpoint
 app.get("/history/dataset", (_req: Request, res: Response) => {
   try {
-    const datasetPath = path.join(__dirname, "src", "historical_dataset.json");
+    const datasetPath = path.join(rootDir, "src", "historical_dataset.json");
     if (fs.existsSync(datasetPath)) {
       const raw = fs.readFileSync(datasetPath, "utf-8");
       const parsed = JSON.parse(raw);
@@ -518,75 +522,129 @@ app.get("/history/dataset", (_req: Request, res: Response) => {
 /**
  * Robust Device Data Source Resolver
  *
- * Prevents spoofing: a payload merely asserting data_source="esp32" in JSON is rejected
- * as physical unless accompanied by device verification (valid device header/token).
- * In development without shared secrets, we verify device identity headers or secret key.
+ * Enforces strict authentication for all physical ESP32 telemetry and heartbeats:
+ * requires BOTH a whitelisted x-device-id header AND a matching secret header
+ * (x-device-secret or x-sensor-key) verified against process.env.ESP32_SECRET.
  */
-const ESP32_HARDWARE_SECRET = process.env.ESP32_SECRET || "esp32_hardware_secure_token_2026";
 const KNOWN_DEVICE_IDS = new Set(["ESP32_LAB_CLASSROOM_01", "esp32_dev_node_01"]);
 
-function determineDeviceSource(req: Request): {
+function getConfiguredEsp32Secret(): string | null {
+  const raw = process.env.ESP32_SECRET;
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function constantTimeSecretMatch(candidate: string, expected: string): boolean {
+  const candidateBuf = Buffer.from(candidate, "utf8");
+  const expectedBuf = Buffer.from(expected, "utf8");
+  if (candidateBuf.length !== expectedBuf.length) {
+    return false;
+  }
+  return timingSafeEqual(candidateBuf, expectedBuf);
+}
+
+export interface DeviceSourceAuthResult {
   source: "esp32" | "simulated" | "manual" | "imported";
   isPhysical: boolean;
+  claimsPhysical: boolean;
   deviceId?: string;
   isAuthenticated: boolean;
-} {
-  const reqSource = (req.body?.data_source || "").toLowerCase().trim();
-  const headerDeviceId = (req.headers["x-device-id"] as string) || (req.body?.device_id as string);
-  const headerSecret = (req.headers["x-device-secret"] as string) || (req.headers["x-sensor-key"] as string);
-  const headerSource = ((req.headers["x-sensor-source"] as string) || "").toLowerCase().trim();
+}
 
-  // Explicit simulation requests are always simulated
-  if (reqSource === "simulated" || headerSource === "simulated") {
-    return { source: "simulated", isPhysical: false, isAuthenticated: true };
-  }
-  if (reqSource === "imported" || headerSource === "imported") {
-    return { source: "imported", isPhysical: false, isAuthenticated: true };
-  }
+export function determineDeviceSource(
+  req: Request,
+  options: { requirePhysical?: boolean } = {}
+): DeviceSourceAuthResult {
+  const reqSource = typeof req.body?.data_source === "string" ? req.body.data_source.toLowerCase().trim() : "";
+  const headerSource = typeof req.headers["x-sensor-source"] === "string"
+    ? req.headers["x-sensor-source"].toLowerCase().trim()
+    : "";
+  const headerDeviceId = typeof req.headers["x-device-id"] === "string" ? req.headers["x-device-id"].trim() : "";
+  const bodyDeviceId = typeof req.body?.device_id === "string" ? req.body.device_id.trim() : "";
+  const rawSecretHeader = typeof req.headers["x-device-secret"] === "string"
+    ? req.headers["x-device-secret"].trim()
+    : typeof req.headers["x-sensor-key"] === "string"
+      ? req.headers["x-sensor-key"].trim()
+      : "";
 
-  // Check if claimed to be ESP32 physical
-  const claimsPhysical = reqSource === "esp32" || headerSource === "esp32" || headerSource === "hardware";
-
-  if (claimsPhysical) {
-    const hasValidDevice = Boolean(headerDeviceId && KNOWN_DEVICE_IDS.has(headerDeviceId));
-    const hasValidSecret = Boolean(headerSecret && headerSecret === ESP32_HARDWARE_SECRET);
-
-    // In local dev/test or production:
-    // Requires a known device ID. If secret is provided it must match ESP32_HARDWARE_SECRET.
-    // If device ID is unknown or secret is wrong, authentication fails.
-    if (hasValidDevice && (!headerSecret || hasValidSecret)) {
+  // Heartbeat endpoints strictly require authenticated physical ESP32 hardware
+  if (options.requirePhysical) {
+    if (reqSource === "simulated" || headerSource === "simulated" || reqSource === "imported" || headerSource === "imported") {
       return {
-        source: "esp32",
-        isPhysical: true,
-        deviceId: headerDeviceId,
-        isAuthenticated: true,
+        source: "simulated",
+        isPhysical: false,
+        claimsPhysical: true,
+        deviceId: headerDeviceId || bodyDeviceId || undefined,
+        isAuthenticated: false,
       };
     }
+  } else {
+    // Explicit simulation / imported requests remain isolated from physical telemetry
+    if (reqSource === "simulated" || headerSource === "simulated") {
+      return { source: "simulated", isPhysical: false, claimsPhysical: false, isAuthenticated: true };
+    }
+    if (reqSource === "imported" || headerSource === "imported") {
+      return { source: "imported", isPhysical: false, claimsPhysical: false, isAuthenticated: true };
+    }
+  }
 
+  const claimsPhysical =
+    Boolean(options.requirePhysical) ||
+    reqSource === "esp32" ||
+    headerSource === "esp32" ||
+    headerSource === "hardware" ||
+    headerDeviceId.length > 0 ||
+    bodyDeviceId.length > 0 ||
+    rawSecretHeader.length > 0;
+
+  if (!claimsPhysical) {
+    return { source: "manual", isPhysical: false, claimsPhysical: false, isAuthenticated: true };
+  }
+
+  const configuredSecret = getConfiguredEsp32Secret();
+  const hasValidDevice = headerDeviceId.length > 0 && KNOWN_DEVICE_IDS.has(headerDeviceId);
+  const hasValidSecret =
+    configuredSecret !== null &&
+    rawSecretHeader.length > 0 &&
+    constantTimeSecretMatch(rawSecretHeader, configuredSecret);
+
+  if (hasValidDevice && hasValidSecret) {
     return {
-      source: "manual",
-      isPhysical: false,
+      source: "esp32",
+      isPhysical: true,
+      claimsPhysical: true,
       deviceId: headerDeviceId,
-      isAuthenticated: false,
+      isAuthenticated: true,
     };
   }
 
-  return { source: "manual", isPhysical: false, isAuthenticated: true };
+  return {
+    source: "manual",
+    isPhysical: false,
+    claimsPhysical: true,
+    deviceId: headerDeviceId || bodyDeviceId || undefined,
+    isAuthenticated: false,
+  };
 }
 
 // Reset history (Admin protected, or permitted for isolated testing)
-app.delete("/history", (req: Request, res: Response) => {
-  // Clear allowed
+app.delete("/history", (_req: Request, res: Response) => {
+  setContinuousSimulator(false);
   history.clear();
   res.json({ message: "History cleared.", sensor_health: history.getSensorHealth() });
 });
 
 // Heartbeat endpoint for physical ESP32 nodes
 app.post(["/readings/heartbeat", "/api/telemetry/heartbeat"], (req: Request, res: Response) => {
-  const authResult = determineDeviceSource(req);
+  const authResult = determineDeviceSource(req, { requirePhysical: true });
   if (!authResult.isAuthenticated || !authResult.isPhysical) {
+    history.recordSensorEvent(
+      `Rejected unauthenticated ESP32 heartbeat${authResult.deviceId ? ` (${authResult.deviceId})` : ""}`,
+      "warn"
+    );
     return res.status(401).json({
-      detail: "Unauthenticated device heartbeat: Valid device ID (x-device-id) and secret required.",
+      detail: "Unauthenticated device heartbeat: Valid device ID (x-device-id) and matching device secret required.",
       error_code: "ESP32_UNAUTHENTICATED",
     });
   }
@@ -604,15 +662,25 @@ app.post(["/readings/heartbeat", "/api/telemetry/heartbeat"], (req: Request, res
 // Evaluate reading
 app.post("/evaluate", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    validateReadingInput(req.body);
     const authResult = determineDeviceSource(req);
+    if (authResult.claimsPhysical && !authResult.isAuthenticated) {
+      history.recordSensorEvent(
+        `Rejected unauthenticated physical evaluation request${authResult.deviceId ? ` (${authResult.deviceId})` : ""}`,
+        "warn"
+      );
+      return res.status(401).json({
+        detail: "Unauthenticated device: Physical ESP32 evaluation requires valid x-device-id and matching device secret.",
+        error_code: "ESP32_UNAUTHENTICATED",
+      });
+    }
+    validateReadingInput(req.body);
     const reading: ClassroomReadingInput = {
       ...req.body,
       timestamp: req.body.timestamp || new Date().toISOString(),
       data_source: authResult.source,
       measured_power_w: req.body.measured_power_w !== undefined ? req.body.measured_power_w : null,
     };
-    const result = await evaluateAndStoreReadingAsync(reading);
+    const result = await evaluateAndStoreReadingAsync(reading, authResult.deviceId);
     res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -622,17 +690,19 @@ app.post("/evaluate", async (req: Request, res: Response, next: NextFunction) =>
 // Readings endpoints
 app.post("/readings", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    validateReadingInput(req.body);
     const authResult = determineDeviceSource(req);
-    const claimsPhysical = (req.body?.data_source || "").toLowerCase().trim() === "esp32" ||
-      ((req.headers["x-sensor-source"] as string) || "").toLowerCase().trim() === "esp32";
-
-    if (claimsPhysical && !authResult.isAuthenticated) {
+    if (authResult.claimsPhysical && !authResult.isAuthenticated) {
+      history.recordSensorEvent(
+        `Rejected unauthenticated physical telemetry${authResult.deviceId ? ` (${authResult.deviceId})` : ""}`,
+        "warn"
+      );
       return res.status(401).json({
-        detail: "Unauthenticated device: Telemetry claiming physical ESP32 source must provide valid device authentication headers (x-device-id / secret).",
+        detail: "Unauthenticated device: Telemetry claiming physical ESP32 source must provide valid device authentication headers (x-device-id and matching device secret).",
         error_code: "ESP32_UNAUTHENTICATED",
       });
     }
+
+    validateReadingInput(req.body);
 
     const reading: ClassroomReadingInput = {
       ...req.body,
@@ -640,7 +710,7 @@ app.post("/readings", async (req: Request, res: Response, next: NextFunction) =>
       data_source: authResult.source,
       measured_power_w: req.body.measured_power_w !== undefined ? req.body.measured_power_w : null,
     };
-    const result = await evaluateAndStoreReadingAsync(reading);
+    const result = await evaluateAndStoreReadingAsync(reading, authResult.deviceId);
     if (authResult.isPhysical && authResult.isAuthenticated) {
       history.recordPhysicalTelemetry(result, authResult.deviceId || history.configuredDeviceId);
       history.recordSensorEvent(`Physical telemetry ingested from ${authResult.deviceId || "ESP32"}`, "info");
@@ -848,7 +918,13 @@ app.get("/api/power/summary", (req: Request, res: Response) => {
   const recent = history.recent(1);
   const latest = recent.length ? recent[0] : null;
 
-  const isPhysical = latest ? latest.reading.data_source === "esp32" : false;
+  const sensorHealth = history.getSensorHealth();
+  const isPhysical = Boolean(
+    latest &&
+    latest.reading.data_source === "esp32" &&
+    !latest.sensor_data_status?.isHistorical &&
+    sensorHealth.physicalSensorConnected
+  );
   const dataSource = latest ? latest.reading.data_source || "simulated" : "no_data";
   const smartBoardOn = latest ? Boolean(latest.reading.smart_board_on) : false;
 
@@ -913,7 +989,11 @@ app.get("/api/power/summary", (req: Request, res: Response) => {
 app.get("/api/reports/prototype", (_req: Request, res: Response) => {
   const recent = history.recent(1);
   const latest = recent.length ? recent[0] : null;
-  const isPhysical = latest?.reading?.data_source === "esp32";
+  const isPhysical = Boolean(
+    latest?.reading?.data_source === "esp32" &&
+    !latest.sensor_data_status?.isHistorical &&
+    history.getSensorHealth().physicalSensorConnected
+  );
 
   const report = calculatePrototypeEnergyReport({
     mini_fan_on: latest?.reading?.no_of_fans_on !== undefined && latest.reading.no_of_fans_on !== null ? latest.reading.no_of_fans_on > 0 : false,
@@ -1072,7 +1152,9 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ detail: err?.message || "Internal server error" });
 });
 
-async function startServer() {
+export { app, startServer };
+
+async function startServer(port = PORT, host = HOST) {
   if (isSupabaseConfigured()) {
     try {
       await Promise.all([
@@ -1084,9 +1166,16 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, HOST, () => {
-    console.log(`AI Energy Guardian server running at http://${HOST}:${PORT}`);
+  return app.listen(port, host, () => {
+    console.log(`AI Energy Guardian server running at http://${host}:${port}`);
   });
 }
 
-startServer();
+const isMainModule =
+  !isAutomatedTestEnv() &&
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (isMainModule) {
+  startServer();
+}

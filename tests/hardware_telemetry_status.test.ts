@@ -14,8 +14,14 @@
  * 10. Existing three-report energy calculations and Supabase persistence continue to work.
  */
 
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import {
+  startIsolatedTestServer,
+  IsolatedTestServer,
+  ESP32_AUTH_HEADERS,
+  TEST_ESP32_SECRET,
+} from "./test_helper.js";
 import { history, sensorDataStatus } from "../src/history.js";
 import {
   calculateClassroomConnectedLoad,
@@ -28,7 +34,19 @@ import {
   isSupabaseConfigured,
 } from "../src/supabase.js";
 
-const API_BASE = "http://localhost:3000";
+let testServer: IsolatedTestServer;
+let API_BASE = "";
+
+before(async () => {
+  testServer = await startIsolatedTestServer();
+  API_BASE = testServer.baseUrl;
+});
+
+after(async () => {
+  if (testServer) {
+    await testServer.close();
+  }
+});
 
 async function postJson(url: string, data: any, headers: Record<string, string> = {}) {
   const reqHeaders: Record<string, string> = {
@@ -88,10 +106,7 @@ test("2. Fresh authenticated physical telemetry transitions status to CONNECTED"
       timestamp: freshTimestamp,
       data_source: "esp32",
     },
-    {
-      "x-device-id": "ESP32_LAB_CLASSROOM_01",
-      "x-sensor-source": "esp32",
-    }
+    ESP32_AUTH_HEADERS
   );
 
   assert.equal(ingestRes.status, 201);
@@ -220,10 +235,7 @@ test("5. Stale telemetry exceeding configured timeout marks status as STALE", as
       timestamp: staleTimestamp,
       data_source: "esp32",
     },
-    {
-      "x-device-id": "ESP32_LAB_CLASSROOM_01",
-      "x-sensor-source": "esp32",
-    }
+    ESP32_AUTH_HEADERS
   );
   assert.equal(res.status, 201);
 
@@ -265,7 +277,20 @@ test("6. Unauthenticated or invalid telemetry cannot establish a physical connec
   );
   assert.equal(invalidDevRes.status, 401);
 
-  // Attempt with invalid payload (e.g. occupancy < 0)
+  // Attempt with whitelisted device ID but NO secret header -> must return 401
+  const missingSecretRes = await postJson(
+    "/readings",
+    {
+      occupancy: 30,
+      temperature_c: 27.0,
+      humidity_pct: 55.0,
+      data_source: "esp32",
+    },
+    { "x-device-id": "ESP32_LAB_CLASSROOM_01" }
+  );
+  assert.equal(missingSecretRes.status, 401);
+
+  // Attempt with valid credentials but invalid payload (e.g. occupancy < 0) -> returns 422 without connecting
   const invalidDataRes = await postJson(
     "/readings",
     {
@@ -274,7 +299,10 @@ test("6. Unauthenticated or invalid telemetry cannot establish a physical connec
       humidity_pct: 55.0,
       data_source: "esp32",
     },
-    { "x-device-id": "ESP32_LAB_CLASSROOM_01" }
+    {
+      "x-device-id": "ESP32_LAB_CLASSROOM_01",
+      "x-device-secret": TEST_ESP32_SECRET,
+    }
   );
   assert.equal(invalidDataRes.status, 422);
 

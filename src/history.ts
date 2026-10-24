@@ -75,6 +75,7 @@ export function sensorDataStatus(source: string, deviceId?: string, isHistorical
 export interface SensorHealthStatus {
   backendStatus: "online" | "degraded";
   physicalSensorConnected: boolean;
+  simulationActive: boolean;
   status: "live" | "stale" | "disconnected" | "simulated_only";
   statusText: string;
   lastPhysicalReadingTime: string | null;
@@ -97,7 +98,7 @@ export interface HardwareHeartbeat {
   deviceId: string;
   lastReceivedEpochMs: number;
   lastTelemetryTimestamp: string;
-  lastReading: HistoryRecord;
+  lastReading: HistoryRecord | null;
 }
 
 import {
@@ -109,15 +110,54 @@ import {
   DbAiPrediction,
 } from "./supabase.js";
 
+export const DEFAULT_STALE_TIMEOUT_SECONDS = 30;
+export const MIN_STALE_TIMEOUT_SECONDS = 1;
+export const MAX_STALE_TIMEOUT_SECONDS = 3600;
+
+/**
+ * Safely parses and validates a sensor stale-timeout value in seconds.
+ * - Defaults to 30s when missing, empty, non-numeric, non-integer, zero, or negative.
+ * - Clamps valid positive integers to [MIN_STALE_TIMEOUT_SECONDS, MAX_STALE_TIMEOUT_SECONDS].
+ */
+export function parseStaleTimeoutSeconds(rawValue: unknown): number {
+  if (rawValue === undefined || rawValue === null) {
+    return DEFAULT_STALE_TIMEOUT_SECONDS;
+  }
+
+  let parsed: number;
+  if (typeof rawValue === "number") {
+    if (!Number.isFinite(rawValue) || !Number.isInteger(rawValue)) {
+      return DEFAULT_STALE_TIMEOUT_SECONDS;
+    }
+    parsed = rawValue;
+  } else if (typeof rawValue === "string") {
+    const trimmed = rawValue.trim();
+    if (!trimmed || !/^[+-]?\d+$/.test(trimmed)) {
+      return DEFAULT_STALE_TIMEOUT_SECONDS;
+    }
+    parsed = Number(trimmed);
+    if (!Number.isSafeInteger(parsed)) {
+      return DEFAULT_STALE_TIMEOUT_SECONDS;
+    }
+  } else {
+    return DEFAULT_STALE_TIMEOUT_SECONDS;
+  }
+
+  if (parsed <= 0) {
+    return DEFAULT_STALE_TIMEOUT_SECONDS;
+  }
+
+  return Math.min(MAX_STALE_TIMEOUT_SECONDS, Math.max(MIN_STALE_TIMEOUT_SECONDS, parsed));
+}
+
 class DemoHistoryStore {
   private items: HistoryRecord[] = [];
   private maxItems = 200;
   private sensorErrors: Array<{ timestamp: string; message: string; severity: "warn" | "error" | "info" }> = [];
   readonly configuredDeviceId = "ESP32_LAB_CLASSROOM_01";
-  staleThresholdSeconds: number = process.env.SENSOR_STALE_TIMEOUT_SECONDS
-    ? parseInt(process.env.SENSOR_STALE_TIMEOUT_SECONDS, 10)
-    : 30;
+  staleThresholdSeconds: number = parseStaleTimeoutSeconds(process.env.SENSOR_STALE_TIMEOUT_SECONDS);
   private liveHardwareHeartbeat: HardwareHeartbeat | null = null;
+  private simulatorStreamActive = false;
 
   get storageName(): string {
     return getStorageName();
@@ -127,12 +167,21 @@ class DemoHistoryStore {
     return getStorageMode();
   }
 
-  setStaleThreshold(seconds: number): void {
-    this.staleThresholdSeconds = Math.max(1, seconds);
+  setStaleThreshold(seconds: unknown): number {
+    this.staleThresholdSeconds = parseStaleTimeoutSeconds(seconds);
+    return this.staleThresholdSeconds;
   }
 
   getStaleThreshold(): number {
     return this.staleThresholdSeconds;
+  }
+
+  setSimulatorStreamActive(active: boolean): void {
+    this.simulatorStreamActive = Boolean(active);
+  }
+
+  isSimulatorStreamActive(): boolean {
+    return this.simulatorStreamActive;
   }
 
   /**
@@ -156,15 +205,20 @@ class DemoHistoryStore {
     const iso = new Date().toISOString();
     if (this.liveHardwareHeartbeat) {
       this.liveHardwareHeartbeat.lastReceivedEpochMs = now;
+      this.liveHardwareHeartbeat.lastTelemetryTimestamp = iso;
       this.liveHardwareHeartbeat.deviceId = deviceId;
     } else {
       this.liveHardwareHeartbeat = {
         deviceId,
         lastReceivedEpochMs: now,
         lastTelemetryTimestamp: iso,
-        lastReading: null as any,
+        lastReading: null,
       };
     }
+  }
+
+  getHeartbeatState(): HardwareHeartbeat | null {
+    return this.liveHardwareHeartbeat ? { ...this.liveHardwareHeartbeat } : null;
   }
 
   constructor() {
@@ -440,26 +494,37 @@ class DemoHistoryStore {
   }
 
   getLatestSimulated(): HistoryRecord | null {
-    return this.items.find((item) => (item.reading.data_source || "").toLowerCase() === "simulated") || null;
+    return (
+      this.items.find(
+        (item) => (item.reading.data_source || "").toLowerCase() === "simulated" && !item.sensor_data_status?.isHistorical
+      ) || null
+    );
   }
 
   getSensorHealth(): SensorHealthStatus {
-    const physicalItems = this.items.filter((item) => (item.reading.data_source || "").toLowerCase() === "esp32" && !item.sensor_data_status.isHistorical);
-    const simulatedItems = this.items.filter((item) => (item.reading.data_source || "").toLowerCase() === "simulated");
+    const physicalItems = this.items.filter(
+      (item) => (item.reading.data_source || "").toLowerCase() === "esp32" && !item.sensor_data_status?.isHistorical
+    );
+    const simulatedItems = this.items.filter(
+      (item) => (item.reading.data_source || "").toLowerCase() === "simulated" && !item.sensor_data_status?.isHistorical
+    );
     const latestItem = this.items[0] || null;
     const latestSimulated = simulatedItems[0] || null;
 
     const totalPhysical = physicalItems.length;
     const totalSimulated = simulatedItems.length;
+    const simulationActive = this.simulatorStreamActive || totalSimulated > 0;
+    const effectiveThreshold = parseStaleTimeoutSeconds(this.staleThresholdSeconds);
 
     // A physical sensor system is marked CONNECTED only when a verified, authenticated ESP32
-    // has communicated with fresh telemetry within staleThresholdSeconds in this runtime process.
-    if (!this.liveHardwareHeartbeat || !this.liveHardwareHeartbeat.lastReading) {
+    // has communicated with fresh telemetry or heartbeat within staleThresholdSeconds in this runtime process.
+    if (!this.liveHardwareHeartbeat) {
       return {
         backendStatus: "online",
         physicalSensorConnected: false,
-        status: totalSimulated > 0 ? "simulated_only" : "disconnected",
-        statusText: totalSimulated > 0
+        simulationActive,
+        status: simulationActive ? "simulated_only" : "disconnected",
+        statusText: simulationActive
           ? "Physical sensors are not connected · Showing SIMULATED DATA only (Awaiting ESP32)"
           : "Physical sensors are not connected. Awaiting ESP32 hardware connection.",
         lastPhysicalReadingTime: null,
@@ -473,7 +538,7 @@ class DemoHistoryStore {
         latestRecord: latestItem,
         configuredDeviceId: this.configuredDeviceId,
         lastValidPacketTime: null,
-        staleThresholdSeconds: this.staleThresholdSeconds,
+        staleThresholdSeconds: effectiveThreshold,
         sensorErrors: this.sensorErrors.slice(0, 10),
       };
     }
@@ -483,11 +548,12 @@ class DemoHistoryStore {
     const telemetryTime = new Date(this.liveHardwareHeartbeat.lastTelemetryTimestamp).getTime();
     const ageFromTelemetry = isNaN(telemetryTime) ? ageFromReceipt : Math.max(0, Math.round((now - telemetryTime) / 1000));
     const physicalAgeSeconds = Math.max(ageFromReceipt, ageFromTelemetry);
-    const isLive = physicalAgeSeconds <= this.staleThresholdSeconds;
+    const isLive = physicalAgeSeconds <= effectiveThreshold;
 
     return {
       backendStatus: "online",
       physicalSensorConnected: isLive,
+      simulationActive,
       status: isLive ? "live" : "stale",
       statusText: isLive
         ? "Physical ESP32 Sensor Connected · Live Data"
@@ -498,12 +564,12 @@ class DemoHistoryStore {
       totalSimulatedReadings: totalSimulated,
       totalRecords: this.items.length,
       latestDataSource: isLive ? "PHYSICAL_ESP32" : (latestItem ? (latestItem.sensor_data_status?.isHistorical ? "HISTORICAL" : latestItem.reading.data_source || "unknown") : null),
-      latestPhysicalReading: isLive ? this.liveHardwareHeartbeat.lastReading : null,
+      latestPhysicalReading: isLive ? (this.liveHardwareHeartbeat.lastReading || null) : null,
       latestSimulatedReading: latestSimulated,
       latestRecord: latestItem,
       configuredDeviceId: this.liveHardwareHeartbeat.deviceId || this.configuredDeviceId,
       lastValidPacketTime: this.liveHardwareHeartbeat.lastTelemetryTimestamp,
-      staleThresholdSeconds: this.staleThresholdSeconds,
+      staleThresholdSeconds: effectiveThreshold,
       sensorErrors: this.sensorErrors.slice(0, 10),
     };
   }
@@ -515,6 +581,7 @@ class DemoHistoryStore {
   clear(): void {
     this.items = [];
     this.liveHardwareHeartbeat = null;
+    this.simulatorStreamActive = false;
     this.recordSensorEvent("History memory reset. Awaiting ESP32 hardware connection.", "info");
   }
 }

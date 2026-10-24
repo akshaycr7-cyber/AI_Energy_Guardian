@@ -1,5 +1,6 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import { startIsolatedTestServer, IsolatedTestServer } from "./test_helper.js";
 import {
   userStore,
   hashPassword,
@@ -8,7 +9,19 @@ import {
   verifyToken,
 } from "../src/auth.js";
 
-const API_BASE = "http://localhost:3000";
+let testServer: IsolatedTestServer;
+let API_BASE = "";
+
+before(async () => {
+  testServer = await startIsolatedTestServer();
+  API_BASE = testServer.baseUrl;
+});
+
+after(async () => {
+  if (testServer) {
+    await testServer.close();
+  }
+});
 
 async function postJson(url: string, data: any, token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };

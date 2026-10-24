@@ -14,12 +14,15 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import "./test_helper.js";
 import {
   setSupabaseClientForTesting,
   checkSupabaseHealth,
   getStorageName,
   getStorageMode,
   isSupabaseConfigured,
+  isAutomatedTestEnv,
+  hasProductionSupabaseEnv,
   getSupabaseConfig,
 } from "../src/supabase.js";
 import { userStore, hashPassword } from "../src/auth.js";
@@ -419,15 +422,17 @@ test("7. Simulator vs. Physical Telemetry Strict Schema Tagging", async () => {
   setSupabaseClientForTesting(null);
 });
 
-test("8. Real Supabase Project Credentials Diagnostic", () => {
+test("8. Production Supabase Isolation in Automated Tests (In-Memory & Mock Only)", () => {
+  setSupabaseClientForTesting(null);
+  assert.equal(isAutomatedTestEnv(), true, "Automated test mode must be active");
+
+  // Even when production SUPABASE_* credentials exist in process.env, test mode must never resolve them
   const cfg = getSupabaseConfig();
-  if (cfg) {
-    console.log("ℹ️ Real Supabase credentials detected in environment.");
-    console.log(`   Host: ${new URL(cfg.url).hostname}`);
-    console.log(`   Service Role Key configured: ${cfg.isServiceRole}`);
-  } else {
-    console.log("ℹ️ No external Supabase credentials found in environment.");
-    console.log("   Running in verified mock mode. Real credentials required for live Supabase deployment.");
-  }
-  assert.ok(true);
+  assert.equal(cfg, null, "External Supabase credentials must never be resolved during automated tests");
+  assert.equal(isSupabaseConfigured(), false);
+  assert.equal(getStorageMode(), "in_memory_demo");
+
+  // Confirm presence check of production env does not activate a client or print any secret/URL
+  const prodConfiguredInEnv = hasProductionSupabaseEnv();
+  assert.equal(typeof prodConfiguredInEnv, "boolean");
 });

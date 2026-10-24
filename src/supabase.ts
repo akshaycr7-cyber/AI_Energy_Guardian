@@ -49,11 +49,42 @@ export function normalizeSupabaseUrl(rawUrl: string): string {
 }
 
 /**
- * Resolves Supabase credentials strictly from environment variables.
- * Prioritizes SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY for authoritative server operations,
- * falling back to SUPABASE_ANON_KEY if service key is omitted.
+ * Detects whether the current Node.js process is running automated tests.
+ */
+export function isAutomatedTestEnv(): boolean {
+  return Boolean(
+    process.env.AEG_TEST_MODE === "1" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.NODE_TEST_CONTEXT !== undefined ||
+    process.execArgv.includes("--test")
+  );
+}
+
+/**
+ * Checks whether production Supabase environment variables exist in process.env
+ * without connecting to or exposing those credentials.
+ */
+export function hasProductionSupabaseEnv(): boolean {
+  const rawUrl = process.env.SUPABASE_URL?.trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_ANON_KEY
+  )?.trim();
+  return Boolean(rawUrl && key && !isPlaceholderConfig(rawUrl));
+}
+
+/**
+ * Resolves Supabase credentials strictly from environment variables for runtime use.
+ * During automated tests, external Supabase credentials are unconditionally disabled
+ * so tests always run against isolated in-memory storage or injected mock clients,
+ * without requiring a second Supabase project or risking writes to production data.
  */
 export function getSupabaseConfig(): SupabaseConfig | null {
+  if (isAutomatedTestEnv()) {
+    return null;
+  }
+
   const rawUrl = process.env.SUPABASE_URL?.trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)?.trim();
   const anonKey = process.env.SUPABASE_ANON_KEY?.trim();
@@ -85,7 +116,14 @@ export function isPlaceholderConfig(url?: string): boolean {
   );
 }
 
+export function isMockClientOverrideActive(): boolean {
+  return clientOverriddenForTesting;
+}
+
 export function isSupabaseConfigured(): boolean {
+  if (isAutomatedTestEnv()) {
+    return clientOverriddenForTesting;
+  }
   if (clientOverriddenForTesting) return true;
   const config = getSupabaseConfig();
   if (!config) return false;
@@ -95,8 +133,13 @@ export function isSupabaseConfigured(): boolean {
 
 /**
  * Returns the active Supabase client instance, initializing it lazily if configured.
+ * In automated test mode, only an explicitly injected mock client may be returned.
  */
 export function getSupabaseClient(): SupabaseClient | null {
+  if (isAutomatedTestEnv()) {
+    return clientOverriddenForTesting ? activeClient : null;
+  }
+
   if (activeClient) return activeClient;
 
   const config = getSupabaseConfig();
@@ -117,9 +160,16 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 /**
- * Allows automated tests to inject a mock or configured client for deterministic testing.
+ * Allows automated tests to inject an in-memory mock client for deterministic persistence testing.
+ * Fails fast if a real SupabaseClient instance (with an external supabaseUrl) is passed.
  */
 export function setSupabaseClientForTesting(client: SupabaseClient | null): void {
+  if (client !== null && typeof (client as any).supabaseUrl === "string") {
+    throw new Error(
+      "Test isolation failure: Real SupabaseClient instances cannot be injected into setSupabaseClientForTesting. Use an in-memory mock client."
+    );
+  }
+
   activeClient = client;
   clientOverriddenForTesting = client !== null;
   if (client) {

@@ -574,10 +574,12 @@
         // Store token safely in localStorage or sessionStorage based on rememberMe
         const storage = rememberMe ? localStorage : sessionStorage;
         // Clean old storage
+        localStorage.removeItem("aieg_auth_token");
+        sessionStorage.removeItem("aieg_auth_token");
         localStorage.removeItem("guardian_auth_token");
         sessionStorage.removeItem("guardian_auth_token");
 
-        storage.setItem("guardian_auth_token", data.token);
+        storage.setItem("aieg_auth_token", data.token);
         localStorage.setItem("guardian_user", JSON.stringify(data.user));
 
         showAlert(`Welcome, ${data.user.email} (${data.user.role.toUpperCase()})! Redirecting…`, "success");

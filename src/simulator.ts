@@ -35,7 +35,7 @@ export function generateReading(): ClassroomReadingInput {
   };
 }
 
-export function evaluateAndStoreReading(reading: ClassroomReadingInput): HistoryRecord {
+export function evaluateAndStoreReading(reading: ClassroomReadingInput, deviceId?: string): HistoryRecord {
   const prediction = predictAll(reading);
   const decision = recommendStates(reading, prediction);
   const evaluatedAt = new Date().toISOString();
@@ -56,7 +56,7 @@ export function evaluateAndStoreReading(reading: ClassroomReadingInput): History
       ai_mode: decision.mode,
       hardware_control_enabled: false,
     },
-    sensor_data_status: sensorDataStatus(reading.data_source || "simulated"),
+    sensor_data_status: sensorDataStatus(reading.data_source || "simulated", deviceId),
     power_status: "unavailable: no physical power meter hardware connected",
   };
 
@@ -64,7 +64,7 @@ export function evaluateAndStoreReading(reading: ClassroomReadingInput): History
   return { id, ...record };
 }
 
-export async function evaluateAndStoreReadingAsync(reading: ClassroomReadingInput): Promise<HistoryRecord> {
+export async function evaluateAndStoreReadingAsync(reading: ClassroomReadingInput, deviceId?: string): Promise<HistoryRecord> {
   const prediction = predictAll(reading);
   const decision = recommendStates(reading, prediction);
   const evaluatedAt = new Date().toISOString();
@@ -85,7 +85,7 @@ export async function evaluateAndStoreReadingAsync(reading: ClassroomReadingInpu
       ai_mode: decision.mode,
       hardware_control_enabled: false,
     },
-    sensor_data_status: sensorDataStatus(reading.data_source || "simulated"),
+    sensor_data_status: sensorDataStatus(reading.data_source || "simulated", deviceId),
     power_status: "unavailable: no physical power meter hardware connected",
   };
 
@@ -108,6 +108,7 @@ export function getSimulatorStatus() {
 export function setContinuousSimulator(enabled: boolean, intervalMs = 15000) {
   if (enabled && !continuousSimulatorActive) {
     continuousSimulatorActive = true;
+    history.setSimulatorStreamActive(true);
     simulatorIntervalTimer = setInterval(() => {
       try {
         runSimulatorStep();
@@ -121,6 +122,9 @@ export function setContinuousSimulator(enabled: boolean, intervalMs = 15000) {
       simulatorIntervalTimer = null;
     }
     continuousSimulatorActive = false;
+    history.setSimulatorStreamActive(false);
+  } else {
+    history.setSimulatorStreamActive(continuousSimulatorActive);
   }
   return getSimulatorStatus();
 }

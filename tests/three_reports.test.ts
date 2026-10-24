@@ -1,6 +1,6 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
+import { startIsolatedTestServer, IsolatedTestServer } from "./test_helper.js";
 import {
   getPrototypeConfig,
   updatePrototypeConfig,
@@ -196,9 +196,21 @@ test("Physical Energy Report: Disconnected status honestly reported with null me
   assert.ok(onlineReport.measured_power_saved_w > 0);
 });
 
-// ----------------- API Integration Tests -----------------
+// ----------------- API Integration Tests (Isolated Ephemeral Server) -----------------
 
-const API_BASE = "http://localhost:3000";
+let testServer: IsolatedTestServer;
+let API_BASE = "";
+
+before(async () => {
+  testServer = await startIsolatedTestServer();
+  API_BASE = testServer.baseUrl;
+});
+
+after(async () => {
+  if (testServer) {
+    await testServer.close();
+  }
+});
 
 test("API: GET /api/reports/prototype returns estimated prototype report", async () => {
   const res = await fetch(`${API_BASE}/api/reports/prototype`);

@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "tsx server.ts",
+    "start": "node dist/server.js",
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "AEG_TEST_MODE=1 tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

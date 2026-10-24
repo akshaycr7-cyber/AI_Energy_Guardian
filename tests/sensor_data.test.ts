@@ -1,9 +1,26 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import {
+  startIsolatedTestServer,
+  IsolatedTestServer,
+  ESP32_AUTH_HEADERS,
+} from "./test_helper.js";
 import { history } from "../src/history.js";
 import { predictAll, recommendStates } from "../src/ml.js";
 
-const API_BASE = "http://localhost:3000";
+let testServer: IsolatedTestServer;
+let API_BASE = "";
+
+before(async () => {
+  testServer = await startIsolatedTestServer();
+  API_BASE = testServer.baseUrl;
+});
+
+after(async () => {
+  if (testServer) {
+    await testServer.close();
+  }
+});
 
 async function postJson(url: string, data: any, token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -79,8 +96,7 @@ test("Requirement 2: Live Physical Sensor Telemetry Detection & Provenance", asy
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-device-id": "ESP32_LAB_CLASSROOM_01",
-      "x-sensor-source": "esp32",
+      ...ESP32_AUTH_HEADERS,
     },
     body: JSON.stringify({
       occupancy: 34,
@@ -148,17 +164,17 @@ test("Requirement 6: Power & Savings Transparency", async () => {
   assert.match(statusRes.body.note, /never fabricates unmeasured power/i);
 });
 
-test("Requirement B: Stale Status Enforcement after 120s threshold", async () => {
+test("Requirement B: Stale Status Enforcement after configured stale timeout threshold", async () => {
   await deleteJson("/history");
 
-  // Ingest reading timestamped 130 seconds ago (simulating stale physical packet)
-  const staleTimestamp = new Date(Date.now() - 130 * 1000).toISOString();
+  const effectiveThreshold = history.staleThresholdSeconds;
+  // Ingest reading timestamped beyond the configured stale timeout (default 30s)
+  const staleTimestamp = new Date(Date.now() - (effectiveThreshold + 15) * 1000).toISOString();
   const res = await fetch(`${API_BASE}/readings`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-device-id": "ESP32_LAB_CLASSROOM_01",
-      "x-sensor-source": "esp32",
+      ...ESP32_AUTH_HEADERS,
     },
     body: JSON.stringify({
       occupancy: 20,
@@ -175,7 +191,7 @@ test("Requirement B: Stale Status Enforcement after 120s threshold", async () =>
   const health = await getJson("/health");
   assert.equal(health.body.sensor_health.physicalSensorConnected, false);
   assert.equal(health.body.sensor_health.status, "stale");
-  assert.ok(health.body.sensor_health.physicalAgeSeconds >= 120);
+  assert.ok(health.body.sensor_health.physicalAgeSeconds > effectiveThreshold);
 
   // Reading endpoint returns is_live = false
   const latestPhysical = await getJson("/readings/latest/physical");
