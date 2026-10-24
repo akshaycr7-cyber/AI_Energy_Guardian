@@ -1152,7 +1152,53 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ detail: err?.message || "Internal server error" });
 });
 
-export { app, startServer };
+export { app, startServer, shutdownServer };
+
+let shutdownHandlersRegistered = false;
+let isShuttingDown = false;
+
+async function shutdownServer(server: ReturnType<typeof app.listen>): Promise<void> {
+  setContinuousSimulator(false);
+  if (!server.listening) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const forceTimer = setTimeout(() => {
+      if (typeof (server as any).closeAllConnections === "function") {
+        (server as any).closeAllConnections();
+      }
+      resolve();
+    }, 5000);
+    forceTimer.unref();
+
+    server.close(() => {
+      clearTimeout(forceTimer);
+      resolve();
+    });
+  });
+}
+
+function registerProcessShutdownHandlers(server: ReturnType<typeof app.listen>): void {
+  if (shutdownHandlersRegistered) return;
+  shutdownHandlersRegistered = true;
+
+  const handleSignal = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`[Server] Received ${signal}. Stopping simulator intervals and closing HTTP server...`);
+    shutdownServer(server)
+      .then(() => {
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error("[Server] Error during graceful shutdown:", err);
+        process.exit(1);
+      });
+  };
+
+  process.once("SIGTERM", () => handleSignal("SIGTERM"));
+  process.once("SIGINT", () => handleSignal("SIGINT"));
+}
 
 async function startServer(port = PORT, host = HOST) {
   if (isSupabaseConfigured()) {
@@ -1166,8 +1212,12 @@ async function startServer(port = PORT, host = HOST) {
     }
   }
 
-  return app.listen(port, host, () => {
-    console.log(`AI Energy Guardian server running at http://${host}:${port}`);
+  return await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
+    const server = app.listen(port, host, () => {
+      console.log(`AI Energy Guardian server running at http://${host}:${port}`);
+      resolve(server);
+    });
+    server.once("error", reject);
   });
 }
 
@@ -1177,5 +1227,12 @@ const isMainModule =
   path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isMainModule) {
-  startServer();
+  startServer()
+    .then((server) => {
+      registerProcessShutdownHandlers(server);
+    })
+    .catch((err) => {
+      console.error("[Server] Fatal startup error:", err);
+      process.exit(1);
+    });
 }

@@ -642,3 +642,43 @@ test("Regression 8: #diag-storage uses authoritative /api/diagnostics storage_mo
   }
 });
 
+test("Regression 9: Cloud Run graceful shutdown stops continuous simulator and closes HTTP server cleanly; Dockerfile & .dockerignore enforce security", async () => {
+  const { startServer, shutdownServer } = await import("../server.js");
+  const { setContinuousSimulator, getSimulatorStatus } = await import("../src/simulator.js");
+
+  // Start an ephemeral server instance, enable continuous simulator, then invoke shutdownServer()
+  const tempServer = await startServer(0, "127.0.0.1");
+  try {
+    assert.equal(tempServer.listening, true);
+
+    setContinuousSimulator(true, 60_000);
+    assert.equal(getSimulatorStatus().active, true);
+
+    await shutdownServer(tempServer);
+    assert.equal(getSimulatorStatus().active, false, "Graceful shutdown must stop active simulator intervals");
+    assert.equal(tempServer.listening, false, "Graceful shutdown must close the HTTP listener");
+
+    // Idempotent second call must resolve cleanly without throwing
+    await assert.doesNotReject(() => shutdownServer(tempServer));
+  } finally {
+    await shutdownServer(tempServer);
+  }
+
+  // Verify Dockerfile & .dockerignore invariants
+  const dockerfile = fs.readFileSync(path.join(ROOT_DIR, "Dockerfile"), "utf8");
+  const dockerignore = fs.readFileSync(path.join(ROOT_DIR, ".dockerignore"), "utf8");
+
+  assert.match(dockerfile, /^FROM node:22-alpine AS builder/m);
+  assert.match(dockerfile, /^USER node$/m, "Dockerfile must run as non-root user");
+  assert.match(dockerfile, /npm run build/);
+  assert.match(dockerfile, /dashboard/);
+  assert.match(dockerfile, /src\/historical_dataset\.json/);
+  assert.equal(/SUPABASE_SERVICE_ROLE_KEY|ESP32_SECRET|JWT_SECRET/.test(dockerfile), false, "Dockerfile must not bake secrets");
+
+  assert.match(dockerignore, /^\.env$/m);
+  assert.match(dockerignore, /^node_modules$/m);
+  assert.match(dockerignore, /^dist$/m);
+  assert.match(dockerignore, /^tests$/m);
+});
+
+

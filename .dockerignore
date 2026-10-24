@@ -1,0 +1,35 @@
+# Version control & editor metadata
+.git
+.gitignore
+.aistudio
+.vscode
+.idea
+
+# Dependencies & build output (rebuilt cleanly inside builder stage)
+node_modules
+dist
+npm-debug.log*
+
+# Environment files, credentials & service-account keys (never include in build context)
+.env
+.env.*
+*.env
+service-account*.json
+*serviceAccount*.json
+*.pem
+*.key
+
+# Automated tests, offline source workbooks, migrations & docs not needed at runtime
+tests
+data
+supabase
+README.md
+dashboard/README.md
+src/assets
+__pycache__
+*.py[cod]
+.pytest_cache
+.playwright-cli
+.venv
+venv
+ml/models/*.joblib
