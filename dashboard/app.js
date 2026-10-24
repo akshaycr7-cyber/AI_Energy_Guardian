@@ -77,24 +77,30 @@ function updateConnectionAndSensors(health, sensorHealth) {
   const hwBanner = $("hardware-status-banner");
   const isPrivileged = currentUser && (currentUser.role === "admin" || currentUser.role === "operator");
 
+  const simBanner = $("sim-active-banner");
+  const isSimActive = isContinuousSimActive || (sensorHealth && sensorHealth.status === "simulated_only");
+  if (simBanner) {
+    simBanner.style.display = isSimActive ? "block" : "none";
+  }
+
   if (!sensorHealth) {
     if (sensorBadge) {
-      sensorBadge.textContent = "Sensors: Unavailable";
+      sensorBadge.textContent = "Sensors: NOT CONNECTED";
       sensorBadge.dataset.status = "disconnected";
     }
-    if (sidebarSensor) sidebarSensor.textContent = "Sensors: Offline";
+    if (sidebarSensor) sidebarSensor.textContent = "Sensors: NOT CONNECTED";
     return;
   }
 
-  const { physicalSensorConnected, status, lastPhysicalReadingTime, physicalAgeSeconds, configuredDeviceId } = sensorHealth;
+  const { physicalSensorConnected, status, lastPhysicalReadingTime, physicalAgeSeconds, configuredDeviceId, staleThresholdSeconds } = sensorHealth;
 
   if (physicalSensorConnected) {
     // 1. LIVE PHYSICAL DATA
     if (sensorBadge) {
-      sensorBadge.textContent = isPrivileged ? "Sensors: Live (ESP32)" : "Sensors: Connected";
+      sensorBadge.textContent = isPrivileged ? "Sensors: CONNECTED (ESP32 Live)" : "Sensors: CONNECTED";
       sensorBadge.dataset.status = "live";
     }
-    if (sidebarSensor) sidebarSensor.textContent = isPrivileged ? "Sensors: Live (ESP32)" : "Sensors: Connected";
+    if (sidebarSensor) sidebarSensor.textContent = isPrivileged ? "Sensors: CONNECTED (ESP32)" : "Sensors: CONNECTED";
     if (sidebarDot) {
       sidebarDot.style.background = "var(--green)";
       sidebarDot.style.boxShadow = "0 0 10px var(--green)";
@@ -105,24 +111,23 @@ function updateConnectionAndSensors(health, sensorHealth) {
     if (hwBanner) hwBanner.classList.add("is-live");
     setText("hw-icon", "🟢");
     setText("hw-kicker", isPrivileged ? "HARDWARE STATUS · ESP32 ONLINE" : "SENSOR STATUS");
-    setText("hw-title", isPrivileged ? "Physical ESP32 Sensor Connected · Live Data" : "Classroom sensors connected.");
-    setText("hw-desc", isPrivileged
-      ? "Classroom ESP32 microcontroller is actively transmitting live physical environmental telemetry."
-      : "Live environmental readings are currently active and being monitored.");
+    setText("hw-title", "Physical ESP32 Sensor Connected · Live Data");
+    setText("hw-desc", "Classroom ESP32 microcontroller is actively transmitting live physical environmental telemetry.");
 
     const techRow = $("hw-meta-tech-row");
     if (techRow) {
-      techRow.style.display = isPrivileged ? "flex" : "none";
+      techRow.style.display = "flex";
       setText("hw-device-id", configuredDeviceId || "ESP32_LAB_CLASSROOM_01");
-      setText("hw-last-physical-time", `Last physical packet: ${new Date(lastPhysicalReadingTime).toLocaleTimeString()} (${physicalAgeSeconds}s ago)`);
+      const timeStr = lastPhysicalReadingTime ? new Date(lastPhysicalReadingTime).toLocaleTimeString() : "Just now";
+      setText("hw-last-physical-time", `Last physical packet: ${timeStr} (${physicalAgeSeconds ?? 0}s ago)`);
     }
   } else if (status === "stale") {
-    // 2. STALE PHYSICAL DATA (Received valid physical telemetry, but now exceeded 120s threshold)
+    // 2. STALE PHYSICAL DATA (Exceeded stale-data timeout threshold)
     if (sensorBadge) {
-      sensorBadge.textContent = isPrivileged ? "Sensors: Stale (ESP32)" : "Sensors: Stale";
+      sensorBadge.textContent = "Sensors: STALE";
       sensorBadge.dataset.status = "stale";
     }
-    if (sidebarSensor) sidebarSensor.textContent = isPrivileged ? `Sensors: Stale (${physicalAgeSeconds}s)` : "Sensors: Stale";
+    if (sidebarSensor) sidebarSensor.textContent = `Sensors: STALE (${physicalAgeSeconds}s)`;
     if (sidebarDot) {
       sidebarDot.style.background = "var(--pink)";
       sidebarDot.style.boxShadow = "var(--glow-pink)";
@@ -131,46 +136,37 @@ function updateConnectionAndSensors(health, sensorHealth) {
 
     if (hwBanner) hwBanner.classList.remove("is-live");
     setText("hw-icon", "⚠️");
-    setText("hw-kicker", isPrivileged ? "HARDWARE STATUS · ESP32 STALE" : "SENSOR STATUS");
-    // Normal users see clean contact message per Requirement A.3
-    setText("hw-title", isPrivileged
-      ? `Physical Sensor Stale (Last reported ${physicalAgeSeconds}s ago)`
-      : "Sensor data is temporarily unavailable. Please contact the facility operator.");
-    setText("hw-desc", isPrivileged
-      ? `Physical ESP32 has not transmitted a reading within the last 120 seconds. Age: ${physicalAgeSeconds}s.`
-      : "Sensor data is temporarily unavailable. Please contact the facility operator.");
+    setText("hw-kicker", "HARDWARE STATUS · ESP32 STALE");
+    setText("hw-title", `Physical Sensor Stale (Last reported ${physicalAgeSeconds}s ago)`);
+    setText("hw-desc", `Physical ESP32 telemetry is older than the ${staleThresholdSeconds || 30}s timeout threshold. Live readings are unavailable.`);
 
     const techRow = $("hw-meta-tech-row");
     if (techRow) {
-      techRow.style.display = isPrivileged ? "flex" : "none";
+      techRow.style.display = "flex";
       setText("hw-device-id", configuredDeviceId || "ESP32_LAB_CLASSROOM_01");
-      setText("hw-last-physical-time", `Last physical packet: ${new Date(lastPhysicalReadingTime).toLocaleTimeString()}`);
+      const timeStr = lastPhysicalReadingTime ? new Date(lastPhysicalReadingTime).toLocaleTimeString() : "Unknown";
+      setText("hw-last-physical-time", `Last physical packet: ${timeStr}`);
     }
   } else {
-    // 3. DISCONNECTED (Awaiting initial physical sensor connection)
+    // 3. NOT CONNECTED (No valid authenticated physical sensor telemetry)
     if (sensorBadge) {
-      sensorBadge.textContent = isPrivileged ? "Sensors: Awaiting ESP32" : "Sensors: Disconnected";
+      sensorBadge.textContent = "Sensors: NOT CONNECTED";
       sensorBadge.dataset.status = "disconnected";
     }
-    if (sidebarSensor) sidebarSensor.textContent = isPrivileged ? "Sensors: Awaiting ESP32" : "Sensors: Disconnected";
+    if (sidebarSensor) sidebarSensor.textContent = "Sensors: NOT CONNECTED";
     if (sidebarDot) {
       sidebarDot.style.background = "var(--amber)";
       sidebarDot.style.boxShadow = "0 0 10px var(--amber)";
     }
-    setText("data-source", sensorHealth.totalSimulatedReadings > 0 && isPrivileged
-      ? "Mode: Simulator Sandbox Active"
+    setText("data-source", sensorHealth.totalSimulatedReadings > 0
+      ? "Mode: Simulation Active (Hardware Not Connected)"
       : "Mode: Awaiting Hardware Telemetry");
 
     if (hwBanner) hwBanner.classList.remove("is-live");
     setText("hw-icon", "📡");
-    setText("hw-kicker", isPrivileged ? "HARDWARE STATUS · ESP32 DISCONNECTED" : "SENSOR STATUS");
-    // Normal users see clean disconnected message per Requirement A.3
-    setText("hw-title", isPrivileged
-      ? "Awaiting physical sensor connection · No live data available"
-      : "Sensors disconnected — live readings are currently unavailable.");
-    setText("hw-desc", isPrivileged
-      ? "No live data available. Physical ESP32 microcontroller is not connected yet. This dashboard does not display hardcoded, random, historical, or simulated values as live measurements."
-      : "Sensors disconnected — live readings are currently unavailable.");
+    setText("hw-kicker", "SENSOR STATUS");
+    setText("hw-title", "Physical sensors are not connected.");
+    setText("hw-desc", "Live readings will appear after the ESP32 and sensors are connected and valid telemetry is received.");
 
     const techRow = $("hw-meta-tech-row");
     if (techRow) {
@@ -292,41 +288,41 @@ function updateLiveTelemetryCards(sensorHealth) {
       liveBadge.style.color = "var(--green)";
       liveBadge.style.borderColor = "rgba(72, 245, 166, 0.5)";
     }
-  } else if (isStale && physicalReading) {
-    const r = physicalReading.reading;
-    setText("occupancy", valueOrDash(r.occupancy));
-    setText("occupancy-sub", `Stale reading (${sensorHealth.physicalAgeSeconds}s ago)`);
+  } else if (isStale) {
+    // Stale: Stop presenting readings as current; show explicit N/A and Waiting for sensor data
+    setText("occupancy", "N/A");
+    setText("occupancy-sub", `Stale packet (${sensorHealth?.physicalAgeSeconds ?? 0}s ago) — waiting for data`);
 
-    setText("temperature", formatNumber(r.temperature_c, " °C"));
-    setText("temperature-sub", "Stale sensor data");
+    setText("temperature", "N/A");
+    setText("temperature-sub", "Telemetry stale — waiting for data");
 
-    setText("humidity", formatNumber(r.humidity_pct, " %"));
-    setText("humidity-sub", "Stale sensor data");
+    setText("humidity", "N/A");
+    setText("humidity-sub", "Telemetry stale — waiting for data");
 
-    setText("board", r.smart_board_on ? "ON" : "OFF");
-    setText("board-sub", "Stale state");
+    setText("board", "N/A");
+    setText("board-sub", "Telemetry stale — waiting for data");
 
     if (liveBadge) {
-      liveBadge.textContent = "Sensors Stale";
+      liveBadge.textContent = "Sensors: STALE";
       liveBadge.style.color = "var(--pink)";
       liveBadge.style.borderColor = "rgba(244, 86, 198, 0.5)";
     }
   } else {
-    // Disconnected: show '—'
-    setText("occupancy", "—");
-    setText("occupancy-sub", "Awaiting sensor connection");
+    // Disconnected: Never display 0 or simulated values; show N/A and Waiting for sensor data
+    setText("occupancy", "N/A");
+    setText("occupancy-sub", "Waiting for sensor data");
 
-    setText("temperature", "—");
-    setText("temperature-sub", "Awaiting sensor connection");
+    setText("temperature", "N/A");
+    setText("temperature-sub", "Waiting for sensor data");
 
-    setText("humidity", "—");
-    setText("humidity-sub", "Awaiting sensor connection");
+    setText("humidity", "N/A");
+    setText("humidity-sub", "Waiting for sensor data");
 
-    setText("board", "—");
-    setText("board-sub", "Awaiting sensor connection");
+    setText("board", "N/A");
+    setText("board-sub", "Waiting for sensor data");
 
     if (liveBadge) {
-      liveBadge.textContent = "Awaiting Hardware";
+      liveBadge.textContent = "NOT CONNECTED";
       liveBadge.style.color = "var(--amber)";
       liveBadge.style.borderColor = "rgba(255, 190, 89, 0.4)";
     }
@@ -356,48 +352,211 @@ function updateSimulatorSandbox(sensorHealth) {
 
 function updateAIPredictionsAndDecisions(sensorHealth) {
   const isPhysicalLive = sensorHealth && sensorHealth.physicalSensorConnected;
-  const targetRecord = isPhysicalLive
-    ? sensorHealth.latestPhysicalReading
-    : (currentUser && (currentUser.role === "admin" || currentUser.role === "operator")
-        ? sensorHealth?.latestSimulatedReading
-        : null);
 
-  if (targetRecord && targetRecord.prediction && targetRecord.prediction.status !== "insufficient_data") {
-    const p = targetRecord.prediction;
-    const d = targetRecord.decision;
+  if (isPhysicalLive && sensorHealth.latestPhysicalReading) {
+    const targetRecord = sensorHealth.latestPhysicalReading;
+    if (targetRecord.prediction && targetRecord.prediction.status !== "insufficient_data") {
+      const p = targetRecord.prediction;
+      const d = targetRecord.decision;
 
-    setText("fans", formatNumber(p.predicted_fan_count, " fans"));
-    setText("lights", formatNumber(p.predicted_light_count, " lights"));
-    setText("model-status", isPhysicalLive ? "Model Forecast: Live" : "Model Forecast: Simulated");
+      setText("fans", formatNumber(p.predicted_fan_count, " fans"));
+      setText("lights", formatNumber(p.predicted_light_count, " lights"));
+      setText("model-status", "Model Forecast: Live (ESP32)");
 
-    setText("recommendation", d.reason || "Optimal classroom comfort and energy profile calculated.");
-    setText("recommended-fans", formatNumber(d.recommended_fan_count, " fans"));
-    setText("recommended-lights", formatNumber(d.recommended_light_count, " lights"));
-    setText("recommendation-evidence", `Mode: ${d.ai_mode} · Verified against comfort constraints.`);
-    setText("ai-mode", `(${d.ai_mode})`);
-  } else {
-    // Insufficient Data for Prediction
-    setText("fans", "—");
-    setText("lights", "—");
-    setText("model-status", "Insufficient Data");
-
-    setText("recommendation", "Insufficient data for prediction. Valid sensor observations are required to forecast optimal appliance states.");
-    setText("recommended-fans", "—");
-    setText("recommended-lights", "—");
-    setText("recommendation-evidence", "AI prediction models require occupancy and environmental inputs.");
-    setText("ai-mode", "(Awaiting input features)");
+      setText("recommendation", d.reason || "Optimal classroom comfort and energy profile calculated.");
+      setText("recommended-fans", formatNumber(d.recommended_fan_count, " fans"));
+      setText("recommended-lights", formatNumber(d.recommended_light_count, " lights"));
+      setText("recommendation-evidence", `Mode: ${d.ai_mode} · Verified against live physical sensors.`);
+      setText("ai-mode", `(${d.ai_mode})`);
+      return;
+    }
   }
+
+  // If privileged and continuous simulator is active or simulated records exist, provide clearly labeled simulation mode
+  const isPrivileged = currentUser && (currentUser.role === "admin" || currentUser.role === "operator");
+  if (isPrivileged && sensorHealth?.latestSimulatedReading) {
+    const sim = sensorHealth.latestSimulatedReading;
+    if (sim.prediction && sim.prediction.status !== "insufficient_data") {
+      const p = sim.prediction;
+      const d = sim.decision;
+      setText("fans", formatNumber(p.predicted_fan_count, " fans (simulated)"));
+      setText("lights", formatNumber(p.predicted_light_count, " lights (simulated)"));
+      setText("model-status", "SIMULATION MODE — NOT PHYSICAL SENSOR DATA");
+      setText("recommendation", `[SIMULATION] ${d.reason || "Synthetic sandbox recommendation."}`);
+      setText("recommended-fans", formatNumber(d.recommended_fan_count, " fans (sim)"));
+      setText("recommended-lights", formatNumber(d.recommended_light_count, " lights (sim)"));
+      setText("recommendation-evidence", "SIMULATED ADVISORY: Hardware offline. Calculated strictly from synthetic simulator sandbox.");
+      setText("ai-mode", "(SIMULATION MODE)");
+      return;
+    }
+  }
+
+  // Default disconnected / hardware offline state: Do NOT fabricate or claim active monitoring
+  setText("fans", "N/A");
+  setText("lights", "N/A");
+  setText("model-status", "Standing By (Hardware Offline)");
+
+  setText("recommendation", "Physical sensors are not connected. Live readings will appear after the ESP32 and sensors are connected and valid telemetry is received.");
+  setText("recommended-fans", "N/A");
+  setText("recommended-lights", "N/A");
+  setText("recommendation-evidence", "Live AI monitoring is suspended until authenticated ESP32 telemetry is received.");
+  setText("ai-mode", "(Standing By - Hardware Offline)");
 }
 
-function updatePowerAudit(latestRecord) {
-  const measured = latestRecord?.reading?.measured_power_w;
-  if (measured !== null && measured !== undefined) {
-    setText("audit-measured-power", `${measured} W`);
-  } else {
-    setText("audit-measured-power", "0.0 W");
+let activeReportTab = "classroom"; // "classroom" | "prototype" | "physical"
+let cachedClassroomConfig = null;
+let cachedPrototypeConfig = null;
+
+function setReportTab(tab) {
+  activeReportTab = tab;
+  const tabs = ["classroom", "prototype", "physical"];
+  tabs.forEach(t => {
+    const btn = $(`tab-report-${t}`);
+    const view = $(`view-report-${t}`);
+    const isActive = t === tab;
+    if (btn) btn.classList.toggle("active", isActive);
+    if (view) view.style.display = isActive ? "block" : "none";
+  });
+}
+
+async function updatePowerAudit(latestRecord) {
+  try {
+    const summaryData = await api("/api/power/summary");
+
+    // 1. CLASSROOM SIMULATION REPORT
+    const cr = summaryData?.classroom_report;
+    if (cr) {
+      cachedClassroomConfig = cr.configuration;
+      setText("cr-connected-load", `${cr.configuration.total_connected_load_w} W`);
+      setText("cr-connected-sub", `${cr.configuration.fans_qty}×${cr.configuration.fan_watts}W + ${cr.configuration.lights_qty}×${cr.configuration.light_watts}W + ${cr.configuration.smart_board_qty}×${cr.configuration.smart_board_watts}W`);
+      setText("cr-baseline-power", `${cr.baseline_power_w} W`);
+      setText("cr-optimized-power", `${cr.projected_optimized_power_w} W`);
+      setText("cr-power-saved", `${cr.projected_power_saved_w} W (${cr.projected_savings_percentage}%)`);
+      setText("cr-daily-saved", `${cr.projected_daily_energy_saved_kwh.toFixed(2)} kWh`);
+      setText("cr-monthly-saved", `${cr.projected_monthly_energy_saved_kwh.toFixed(2)} kWh`);
+      setText("cr-monthly-cost", `₹${cr.projected_monthly_cost_saved.toFixed(2)}`);
+
+      if (cr.simulation_policy) {
+        setText("cr-policy-summary", cr.simulation_policy.reason || "Classroom Policy: Thermal comfort & visual rules applied.");
+        if (cr.simulation_policy.fan_reasoning) {
+          setText("cr-policy-fan-text", cr.simulation_policy.fan_reasoning);
+        }
+        if (cr.simulation_policy.light_reasoning) {
+          setText("cr-policy-light-text", cr.simulation_policy.light_reasoning);
+        }
+      }
+
+      // Populate form inputs if not active
+      if (document.activeElement?.id?.indexOf("cr-cfg-") === -1) {
+        const fQty = $("cr-cfg-fans-qty");
+        const fW = $("cr-cfg-fan-watts");
+        const lQty = $("cr-cfg-lights-qty");
+        const lW = $("cr-cfg-light-watts");
+        const bW = $("cr-cfg-board-watts");
+        const rate = $("cr-cfg-rate");
+        const hours = $("cr-cfg-hours");
+        const days = $("cr-cfg-days");
+
+        if (fQty) fQty.value = cr.configuration.fans_qty;
+        if (fW) fW.value = cr.configuration.fan_watts;
+        if (lQty) lQty.value = cr.configuration.lights_qty;
+        if (lW) lW.value = cr.configuration.light_watts;
+        if (bW) bW.value = cr.configuration.smart_board_watts;
+        if (rate) rate.value = cr.configuration.electricity_rate_per_kwh;
+        if (hours) hours.value = cr.configuration.operating_hours_per_day;
+        if (days) days.value = cr.configuration.operating_days_per_month;
+      }
+    }
+
+    // 2. PROTOTYPE ENERGY REPORT
+    const pr = summaryData?.prototype_report;
+    if (pr) {
+      cachedPrototypeConfig = pr.configuration;
+      setText("pr-connected-load", `${pr.total_connected_load_w} W`);
+      setText("pr-connected-sub", `${pr.configuration.mini_fan_qty} Fan (${pr.configuration.mini_fan_watts}W) + ${pr.configuration.led_light_qty} LED (${pr.configuration.led_light_watts}W) + ${pr.configuration.lcd_display_qty} LCD (${pr.configuration.lcd_display_watts}W)`);
+      setText("pr-baseline-power", `${pr.baseline_power_w} W`);
+      setText("pr-active-power", `${pr.active_power_w} W`);
+      setText("pr-power-saved", `${pr.power_saved_w} W (${pr.savings_percentage}%)`);
+      setText("pr-daily-consumption", `${pr.daily_energy_consumption_kwh.toFixed(3)} kWh`);
+      setText("pr-monthly-saved", `${pr.monthly_energy_saved_kwh.toFixed(2)} kWh`);
+      setText("pr-monthly-cost", `₹${pr.monthly_cost_saved.toFixed(2)}`);
+
+      if (document.activeElement?.id?.indexOf("pr-cfg-") === -1) {
+        const fQty = $("pr-cfg-fan-qty");
+        const fW = $("pr-cfg-fan-watts");
+        const lQty = $("pr-cfg-light-qty");
+        const lW = $("pr-cfg-light-watts");
+        const lcdQty = $("pr-cfg-lcd-qty");
+        const lcdW = $("pr-cfg-lcd-watts");
+        const rate = $("pr-cfg-rate");
+        const hours = $("pr-cfg-hours");
+
+        if (fQty) fQty.value = pr.configuration.mini_fan_qty;
+        if (fW) fW.value = pr.configuration.mini_fan_watts;
+        if (lQty) lQty.value = pr.configuration.led_light_qty;
+        if (lW) lW.value = pr.configuration.led_light_watts;
+        if (lcdQty) lcdQty.value = pr.configuration.lcd_display_qty;
+        if (lcdW) lcdW.value = pr.configuration.lcd_display_watts;
+        if (rate) rate.value = pr.configuration.electricity_rate_per_kwh;
+        if (hours) hours.value = pr.configuration.operating_hours_per_day;
+      }
+    }
+
+    // 3. PHYSICAL ENERGY REPORT
+    const ph = summaryData?.physical_report;
+    const isMeterOnline = ph && ph.meter_connected;
+
+    if (isMeterOnline) {
+      setText("ph-status-banner-text", "Physical power meter active — live electrical measurements received.");
+      const phBanner = $("ph-status-banner");
+      if (phBanner) {
+        phBanner.style.background = "rgba(20, 50, 35, 0.45)";
+        phBanner.style.borderColor = "rgba(72, 245, 166, 0.5)";
+      }
+      setText("ph-meter-state", "CT Meter Online");
+      const stateEl = $("ph-meter-state");
+      if (stateEl) stateEl.style.color = "var(--green)";
+      setText("ph-meter-sub", `Device: ${ph.meter_device_id || "Active"}`);
+
+      setText("ph-measured-power", `${ph.measured_power_w} W`);
+      setText("ph-measured-power-sub", "Live measured electrical load");
+      setText("ph-measured-savings", `${ph.measured_power_saved_w} W (${ph.measured_savings_percentage}%)`);
+      setText("ph-measured-savings-sub", "Measured reduction vs 749W baseline");
+
+      setText("ph-ref-baseline", `${ph.baseline_reference_load_w} W`);
+      setText("ph-daily-kwh", `${ph.measured_daily_energy_kwh?.toFixed(2) || "0.00"} kWh`);
+      setText("ph-monthly-kwh", `${ph.measured_monthly_energy_kwh?.toFixed(2) || "0.00"} kWh`);
+      setText("ph-monthly-cost", `₹${ph.measured_monthly_cost_saved?.toFixed(2) || "0.00"}`);
+    } else {
+      // Disconnected: Enforce exact required phrase and null placeholders
+      setText("ph-status-banner-text", "Physical meter not connected — actual energy measurements unavailable.");
+      const phBanner = $("ph-status-banner");
+      if (phBanner) {
+        phBanner.style.background = "rgba(45, 25, 20, 0.45)";
+        phBanner.style.borderColor = "rgba(255, 190, 89, 0.5)";
+      }
+      setText("ph-meter-state", "CT Meter Disconnected");
+      const stateEl = $("ph-meter-state");
+      if (stateEl) stateEl.style.color = "var(--amber)";
+      setText("ph-meter-sub", "Physical telemetry port awaiting hardware");
+
+      setText("ph-measured-power", "—");
+      setText("ph-measured-power-sub", "Actual measurements unavailable");
+      setText("ph-measured-savings", "—");
+      setText("ph-measured-savings-sub", "Zero-fabrication enforced");
+
+      setText("ph-ref-baseline", `${ph?.baseline_reference_load_w || 749} W`);
+      setText("ph-daily-kwh", "—");
+      setText("ph-monthly-kwh", "—");
+      setText("ph-monthly-cost", "—");
+    }
+
+    if (summaryData?.power_summary?.transparency_note) {
+      setText("power-provenance-note", summaryData.power_summary.transparency_note);
+    }
+  } catch (err) {
+    console.warn("Failed to update power audit reports:", err);
   }
-  setText("audit-energy-saved", "Unavailable");
-  setText("audit-cost-saved", "Unavailable");
 }
 
 // ----------------- Canvas Chart -----------------
@@ -1229,6 +1388,276 @@ function toggleNavigation() {
   if (menuToggle) menuToggle.setAttribute("aria-expanded", String(isOpen));
 }
 
+// ----------------- Appliance Wattage Configuration & Interactive Tester -----------------
+
+let currentWattageConfig = null;
+
+async function loadPowerConfig() {
+  try {
+    const data = await api("/api/power/config");
+    currentWattageConfig = data?.config;
+    if (currentWattageConfig) {
+      const fanIn = $("cfg-fan-watts");
+      const lightIn = $("cfg-light-watts");
+      const boardIn = $("cfg-board-watts");
+      const rateIn = $("cfg-rate");
+      const hoursIn = $("cfg-hours");
+
+      if (fanIn) fanIn.value = currentWattageConfig.fan_watts;
+      if (lightIn) lightIn.value = currentWattageConfig.light_watts;
+      if (boardIn) boardIn.value = currentWattageConfig.smart_board_watts;
+      if (rateIn) rateIn.value = currentWattageConfig.electricity_rate_per_kwh;
+      if (hoursIn) hoursIn.value = currentWattageConfig.operating_hours_per_day;
+
+      updatePresetButtons(currentWattageConfig.fan_watts, currentWattageConfig.light_watts);
+    }
+  } catch (_) {}
+}
+
+function updatePresetButtons(fanWatts, lightWatts) {
+  const pClassroom = $("preset-classroom");
+  const pBench = $("preset-bench");
+  if (pClassroom && pBench) {
+    if (Math.abs(fanWatts - 75) < 1 && Math.abs(lightWatts - 28) < 1) {
+      pClassroom.classList.add("active");
+      pBench.classList.remove("active");
+    } else if (Math.abs(fanWatts - 5) < 1 && Math.abs(lightWatts - 2) < 1) {
+      pClassroom.classList.remove("active");
+      pBench.classList.add("active");
+    } else {
+      pClassroom.classList.remove("active");
+      pBench.classList.remove("active");
+    }
+  }
+}
+
+async function saveWattageConfig(updates) {
+  const token = getStoredToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  try {
+    const res = await fetch("/api/power/config", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Could not save wattage config: ${err.detail || "Error"}`);
+      return;
+    }
+    const data = await res.json();
+    currentWattageConfig = data.config;
+    updatePresetButtons(currentWattageConfig.fan_watts, currentWattageConfig.light_watts);
+    await refresh();
+  } catch (err) {
+    alert(`Failed to save wattage config: ${err.message}`);
+  }
+}
+
+async function saveClassroomConfig() {
+  const token = getStoredToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const payload = {
+    fans_qty: parseInt($("cr-cfg-fans-qty")?.value || "5", 10),
+    fan_watts: parseFloat($("cr-cfg-fan-watts")?.value || "75"),
+    lights_qty: parseInt($("cr-cfg-lights-qty")?.value || "8", 10),
+    light_watts: parseFloat($("cr-cfg-light-watts")?.value || "28"),
+    smart_board_watts: parseFloat($("cr-cfg-board-watts")?.value || "150"),
+    electricity_rate_per_kwh: parseFloat($("cr-cfg-rate")?.value || "8.5"),
+    operating_hours_per_day: parseFloat($("cr-cfg-hours")?.value || "8"),
+    operating_days_per_month: parseInt($("cr-cfg-days")?.value || "22", 10),
+  };
+
+  const statusEl = $("cr-save-status");
+  if (statusEl) statusEl.textContent = "Saving…";
+
+  try {
+    const res = await fetch("/api/reports/classroom/config", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (statusEl) {
+        statusEl.textContent = `Error: ${err.detail || "Save failed"}`;
+        statusEl.style.color = "var(--pink)";
+      }
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = "Classroom configuration saved.";
+      statusEl.style.color = "var(--green)";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+    }
+    await refresh();
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.style.color = "var(--pink)";
+    }
+  }
+}
+
+async function savePrototypeConfig() {
+  const token = getStoredToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const payload = {
+    mini_fan_qty: parseInt($("pr-cfg-fan-qty")?.value || "1", 10),
+    mini_fan_watts: parseFloat($("pr-cfg-fan-watts")?.value || "5"),
+    led_light_qty: parseInt($("pr-cfg-light-qty")?.value || "1", 10),
+    led_light_watts: parseFloat($("pr-cfg-light-watts")?.value || "2"),
+    lcd_display_qty: parseInt($("pr-cfg-lcd-qty")?.value || "1", 10),
+    lcd_display_watts: parseFloat($("pr-cfg-lcd-watts")?.value || "2.5"),
+    electricity_rate_per_kwh: parseFloat($("pr-cfg-rate")?.value || "8.5"),
+    operating_hours_per_day: parseFloat($("pr-cfg-hours")?.value || "8"),
+  };
+
+  const statusEl = $("pr-save-status");
+  if (statusEl) statusEl.textContent = "Saving…";
+
+  try {
+    const res = await fetch("/api/reports/prototype/config", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (statusEl) {
+        statusEl.textContent = `Error: ${err.detail || "Save failed"}`;
+        statusEl.style.color = "var(--pink)";
+      }
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = "Prototype configuration saved.";
+      statusEl.style.color = "var(--green)";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+    }
+    await refresh();
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.style.color = "var(--pink)";
+    }
+  }
+}
+
+function initPowerControls() {
+  const tabCr = $("tab-report-classroom");
+  const tabPr = $("tab-report-prototype");
+  const tabPh = $("tab-report-physical");
+
+  if (tabCr) tabCr.addEventListener("click", () => setReportTab("classroom"));
+  if (tabPr) tabPr.addEventListener("click", () => setReportTab("prototype"));
+  if (tabPh) tabPh.addEventListener("click", () => setReportTab("physical"));
+
+  const btnSaveCr = $("btn-save-classroom-cfg");
+  if (btnSaveCr) btnSaveCr.addEventListener("click", saveClassroomConfig);
+
+  const btnSavePr = $("btn-save-prototype-cfg");
+  if (btnSavePr) btnSavePr.addEventListener("click", savePrototypeConfig);
+
+  const btnClassroom = $("preset-classroom");
+  const btnBench = $("preset-bench");
+  const btnSave = $("btn-save-wattage");
+
+  if (btnClassroom) {
+    btnClassroom.addEventListener("click", () => {
+      const fanIn = $("cfg-fan-watts");
+      const lightIn = $("cfg-light-watts");
+      if (fanIn) fanIn.value = "75";
+      if (lightIn) lightIn.value = "28";
+      saveWattageConfig({ fan_watts: 75, light_watts: 28 });
+    });
+  }
+
+  if (btnBench) {
+    btnBench.addEventListener("click", () => {
+      const fanIn = $("cfg-fan-watts");
+      const lightIn = $("cfg-light-watts");
+      if (fanIn) fanIn.value = "5";
+      if (lightIn) lightIn.value = "2";
+      saveWattageConfig({ fan_watts: 5, light_watts: 2 });
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener("click", () => {
+      const fanWatts = parseFloat($("cfg-fan-watts")?.value || "75");
+      const lightWatts = parseFloat($("cfg-light-watts")?.value || "28");
+      const boardWatts = parseFloat($("cfg-board-watts")?.value || "150");
+      const rate = parseFloat($("cfg-rate")?.value || "8.5");
+      const hours = parseFloat($("cfg-hours")?.value || "8");
+
+      saveWattageConfig({
+        fan_watts: fanWatts,
+        light_watts: lightWatts,
+        smart_board_watts: boardWatts,
+        electricity_rate_per_kwh: rate,
+        operating_hours_per_day: hours,
+      });
+    });
+  }
+}
+
+function initRecommendationTester() {
+  const btnTest = $("btn-run-rec-test");
+  if (!btnTest) return;
+
+  btnTest.addEventListener("click", async () => {
+    const occ = parseInt($("test-occupancy")?.value || "25", 10);
+    const temp = parseFloat($("test-temp")?.value || "27.5");
+    const hum = parseFloat($("test-humidity")?.value || "60");
+    const board = $("test-board")?.value === "true";
+    const fans = parseInt($("test-fans-on")?.value || "5", 10);
+    const lights = parseInt($("test-lights-on")?.value || "8", 10);
+
+    try {
+      const res = await fetch("/api/recommendation/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          occupancy: occ,
+          temperature_c: temp,
+          humidity_pct: hum,
+          smart_board_on: board,
+          no_of_fans_on: fans,
+          no_of_lights_on: lights,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Validation error: ${err.detail || "Invalid input"}`);
+        return;
+      }
+
+      const data = await res.json();
+      const card = $("rec-test-result");
+      if (card) card.style.display = "block";
+
+      setText("test-result-mode", data.recommendation.mode);
+      setText("test-result-reason", data.recommendation.reason);
+      setText("test-result-fans", `${data.recommendation.fan_count} fans`);
+      setText("test-result-lights", `${data.recommendation.light_count} lights`);
+      setText("test-result-baseline", `${data.power_breakdown.baseline_power_w} W`);
+      setText("test-result-optimized", `${data.power_breakdown.ai_recommended_power_w} W`);
+      setText("test-result-saved", `${data.power_breakdown.power_saved_w} W (-${data.power_breakdown.savings_percentage}%)`);
+      setText("test-result-cost", `₹${data.power_breakdown.monthly_cost_saved.toFixed(2)} / mo`);
+    } catch (err) {
+      alert(`Testing error: ${err.message}`);
+    }
+  });
+}
+
 // ----------------- Initialization & Event Listeners -----------------
 
 if ($("refresh")) $("refresh").addEventListener("click", refresh);
@@ -1249,6 +1678,10 @@ window.addEventListener("resize", () => {
   else if (cachedDataset) renderEnvironmentChart(cachedDataset.records || []);
 });
 
+initPowerControls();
+initRecommendationTester();
+loadPowerConfig();
 checkAuthSession();
 refresh();
 setInterval(refresh, 10000);
+

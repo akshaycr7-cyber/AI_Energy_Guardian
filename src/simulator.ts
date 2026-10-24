@@ -38,10 +38,16 @@ export function generateReading(): ClassroomReadingInput {
 export function evaluateAndStoreReading(reading: ClassroomReadingInput): HistoryRecord {
   const prediction = predictAll(reading);
   const decision = recommendStates(reading, prediction);
+  const evaluatedAt = new Date().toISOString();
+  const effectiveTimestamp = reading.timestamp || evaluatedAt;
 
-  const record = {
-    timestamp: reading.timestamp || new Date().toISOString(),
-    reading,
+  const record: Omit<HistoryRecord, "id"> = {
+    timestamp: effectiveTimestamp,
+    evaluated_at: evaluatedAt,
+    reading: {
+      ...reading,
+      timestamp: effectiveTimestamp,
+    },
     prediction,
     decision: {
       recommended_fan_count: decision.fan_count,
@@ -56,6 +62,34 @@ export function evaluateAndStoreReading(reading: ClassroomReadingInput): History
 
   const id = history.add(record);
   return { id, ...record };
+}
+
+export async function evaluateAndStoreReadingAsync(reading: ClassroomReadingInput): Promise<HistoryRecord> {
+  const prediction = predictAll(reading);
+  const decision = recommendStates(reading, prediction);
+  const evaluatedAt = new Date().toISOString();
+  const effectiveTimestamp = reading.timestamp || evaluatedAt;
+
+  const record: Omit<HistoryRecord, "id"> = {
+    timestamp: effectiveTimestamp,
+    evaluated_at: evaluatedAt,
+    reading: {
+      ...reading,
+      timestamp: effectiveTimestamp,
+    },
+    prediction,
+    decision: {
+      recommended_fan_count: decision.fan_count,
+      recommended_light_count: decision.light_count,
+      reason: decision.reason,
+      ai_mode: decision.mode,
+      hardware_control_enabled: false,
+    },
+    sensor_data_status: sensorDataStatus(reading.data_source || "simulated"),
+    power_status: "unavailable: no physical power meter hardware connected",
+  };
+
+  return await history.addAsync(record);
 }
 
 export function runSimulatorStep(): HistoryRecord {

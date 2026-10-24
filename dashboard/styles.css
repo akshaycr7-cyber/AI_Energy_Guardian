@@ -1727,4 +1727,203 @@ main {
   }
 }
 
+/* Power Engine & Savings Styling */
+.power-config-panel {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: rgba(12, 14, 34, 0.75);
+  border: 1px solid rgba(138, 112, 255, 0.22);
+}
+
+.power-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.power-config-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(138, 112, 255, 0.35);
+  background: rgba(22, 18, 50, 0.7);
+  color: var(--ice);
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: rgba(138, 112, 255, 0.25);
+  border-color: var(--cyan);
+}
+
+.preset-btn.active {
+  background: rgba(62, 228, 255, 0.15);
+  border-color: var(--cyan);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(62, 228, 255, 0.3);
+}
+
+.power-config-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.power-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.power-field label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.power-field input, .power-field select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(8, 10, 26, 0.85);
+  border: 1px solid rgba(138, 112, 255, 0.3);
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.power-field input:focus, .power-field select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(62, 228, 255, 0.3);
+}
+
+.power-action-btn {
+  padding: 9px 16px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(112, 72, 234, 0.8), rgba(62, 228, 255, 0.8));
+  border: 1px solid rgba(62, 228, 255, 0.5);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.power-action-btn:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 14px rgba(62, 228, 255, 0.4);
+}
+
+/* Power Comparison & Forecast Grid */
+.savings-forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.forecast-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(14, 16, 40, 0.85);
+  border: 1px solid rgba(138, 112, 255, 0.24);
+  position: relative;
+  overflow: hidden;
+}
+
+.forecast-card.highlight {
+  border-color: rgba(72, 245, 166, 0.4);
+  background: radial-gradient(circle at 100% 0, rgba(72, 245, 166, 0.08), transparent 60%), rgba(14, 20, 36, 0.88);
+}
+
+.forecast-card .fc-label {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.forecast-card strong {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.forecast-card small {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* Interactive Recommendation Tester Console */
+.rec-tester-box {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: rgba(14, 16, 42, 0.8);
+  border: 1px solid rgba(62, 228, 255, 0.28);
+}
+
+.rec-tester-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rec-tester-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.rec-result-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: rgba(8, 10, 26, 0.9);
+  border: 1px solid rgba(72, 245, 166, 0.35);
+  display: none;
+}
+
+.rec-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rec-result-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+
 

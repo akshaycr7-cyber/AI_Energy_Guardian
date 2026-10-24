@@ -131,16 +131,32 @@ function createMockSupabaseClient(options: { failQueries?: boolean; failMessage?
 }
 
 test("1. Honest Storage Mode Reporting: Nonpersistent demo mode without credentials", () => {
-  // Ensure mock client is cleared to test default unconfigured state
-  setSupabaseClientForTesting(null);
+  const savedUrl = process.env.SUPABASE_URL;
+  const savedKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const savedSecret = process.env.SUPABASE_SECRET_KEY;
+  const savedAnon = process.env.SUPABASE_ANON_KEY;
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.SUPABASE_SECRET_KEY;
+  delete process.env.SUPABASE_ANON_KEY;
 
-  assert.equal(isSupabaseConfigured(), false);
-  assert.equal(getStorageMode(), "in_memory_demo");
-  assert.equal(getStorageName(), "nonpersistent demo storage (in-memory)");
+  try {
+    // Ensure mock client is cleared to test default unconfigured state
+    setSupabaseClientForTesting(null);
 
-  const health = history.getSensorHealth();
-  assert.equal(health.backendStatus, "online");
-  assert.equal(history.storageName, "nonpersistent demo storage (in-memory)");
+    assert.equal(isSupabaseConfigured(), false);
+    assert.equal(getStorageMode(), "in_memory_demo");
+    assert.equal(getStorageName(), "nonpersistent demo storage (in-memory)");
+
+    const health = history.getSensorHealth();
+    assert.equal(health.backendStatus, "online");
+    assert.equal(history.storageName, "nonpersistent demo storage (in-memory)");
+  } finally {
+    if (savedUrl) process.env.SUPABASE_URL = savedUrl;
+    if (savedKey) process.env.SUPABASE_SERVICE_ROLE_KEY = savedKey;
+    if (savedSecret) process.env.SUPABASE_SECRET_KEY = savedSecret;
+    if (savedAnon) process.env.SUPABASE_ANON_KEY = savedAnon;
+  }
 });
 
 test("2. Database Writes & Reads: User accounts, sensor readings, and AI predictions", async () => {
@@ -342,6 +358,27 @@ test("6. Database Outage & Honest Failure Handling", async () => {
       await userStore.createUserAsync("failing_user@energyguardian.ai", "SecretPass123!");
     },
     /Failed to persist user to Supabase/i
+  );
+
+  // Async reading persistence with failing database throws explicit error rather than pretending success
+  await assert.rejects(
+    async () => {
+      await history.addAsync({
+        timestamp: new Date().toISOString(),
+        reading: { occupancy: 10, temperature_c: 24, data_source: "esp32" },
+        prediction: predictAll({ occupancy: 10, temperature_c: 24 }),
+        decision: {
+          recommended_fan_count: 1,
+          recommended_light_count: 1,
+          reason: "Test",
+          ai_mode: "AI_AUTO",
+          hardware_control_enabled: false,
+        },
+        sensor_data_status: sensorDataStatus("esp32"),
+        power_status: "unavailable",
+      });
+    },
+    /Failed to persist sensor_reading to Supabase/i
   );
 
   setSupabaseClientForTesting(null);

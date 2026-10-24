@@ -64,7 +64,7 @@
           </div>
           <!-- Distinct Backend Status vs Physical Sensor Status Badges -->
           <span id="connection" class="badge" role="status" title="Backend server connection">Backend: Checking…</span>
-          <span id="sensor-connection" class="badge badge-sensor" role="status" title="Sensor hardware status">Sensors: Checking…</span>
+          <span id="sensor-connection" class="badge badge-sensor" role="status" title="Sensor hardware status">Sensors: NOT CONNECTED</span>
           <button id="refresh-top" class="header-refresh" type="button"><span aria-hidden="true">↻</span><span>Refresh</span></button>
           <a id="header-auth-btn" href="/login" class="header-refresh" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #4f339b, #1b7396); border-color: rgba(62, 228, 255, 0.45);"><span aria-hidden="true">👤</span><span id="header-auth-text">Sign In</span></a>
         </div>
@@ -107,13 +107,13 @@
           </div>
         </section>
 
-        <!-- Hardware Status Callout Banner (Role-tailored: simple message for Normal Users, technical diagnostics for Admin/Operator) -->
+        <!-- Hardware Status Callout Banner -->
         <section class="hardware-status-banner" id="hardware-status-banner" aria-labelledby="hw-title">
           <div class="hw-icon" id="hw-icon" aria-hidden="true">📡</div>
           <div class="hw-body">
-            <p class="hw-kicker" id="hw-kicker">HARDWARE SENSOR STATUS</p>
-            <h2 class="hw-title" id="hw-title">Sensors disconnected — live readings are currently unavailable.</h2>
-            <p class="hw-desc" id="hw-desc">Physical sensors are currently not connected. No live data is available.</p>
+            <p class="hw-kicker" id="hw-kicker">SENSOR STATUS</p>
+            <h2 class="hw-title" id="hw-title">Physical sensors are not connected.</h2>
+            <p class="hw-desc" id="hw-desc">Live readings will appear after the ESP32 and sensors are connected and valid telemetry is received.</p>
             <div class="hw-meta-row" id="hw-meta-tech-row" style="display: none;">
               <span id="hw-ingest-note">Device ID: <code id="hw-device-id">ESP32_LAB_CLASSROOM_01</code></span>
               <span id="hw-last-physical-time">Last physical packet: None recorded</span>
@@ -125,7 +125,7 @@
         <section class="notice" aria-labelledby="advisory-title">
           <div class="notice-icon" aria-hidden="true">✦</div>
           <div>
-            <p id="advisory-title" class="notice-label">AI recommendation mode <span id="ai-mode">Awaiting sensor data</span></p>
+            <p id="advisory-title" class="notice-label">AI recommendation mode <span id="ai-mode">Standing By (Hardware Offline)</span></p>
             <p>Recommendations are advisory only. This dashboard does not send direct electrical control commands to classroom appliances.</p>
           </div>
         </section>
@@ -135,6 +135,11 @@
           <span>Loading telemetry…</span>
         </section>
 
+        <!-- Prominent Simulation Warning Banner (Active when continuous simulator is on or simulated data displayed) -->
+        <div id="sim-active-banner" class="sim-warning-bar" style="display: none; margin-bottom: 16px; background: rgba(255, 170, 0, 0.15); border: 1px solid rgba(255, 170, 0, 0.6); color: #ffbe59; padding: 12px 16px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; letter-spacing: 0.5px; box-shadow: 0 0 12px rgba(255, 170, 0, 0.2);">
+          ⚠️ SIMULATION MODE — NOT PHYSICAL SENSOR DATA
+        </div>
+
         <!-- SECTION 1: Classroom Environmental Telemetry -->
         <section class="panel" style="margin-bottom: 22px; padding: 20px 24px;">
           <div class="panel-heading" style="margin-bottom: 16px;">
@@ -142,36 +147,36 @@
               <p class="panel-kicker" id="telemetry-kicker">CLASSROOM TELEMETRY</p>
               <h2 id="telemetry-title">Lab Classroom 101 Environmental Readings</h2>
             </div>
-            <span class="panel-badge" id="live-provenance-badge">Awaiting Hardware</span>
+            <span class="panel-badge" id="live-provenance-badge">NOT CONNECTED</span>
           </div>
 
           <div class="metrics-grid" aria-label="Latest classroom reading">
             <article class="metric-card">
               <span class="metric-icon" aria-hidden="true">◉</span>
               <span class="metric-label">Occupancy</span>
-              <strong id="occupancy">—</strong>
-              <small id="occupancy-sub">Awaiting sensor connection</small>
+              <strong id="occupancy">N/A</strong>
+              <small id="occupancy-sub">Waiting for sensor data</small>
             </article>
             <article class="metric-card">
               <span class="metric-icon" aria-hidden="true">⌁</span>
               <span class="metric-label">Temperature</span>
-              <strong id="temperature">—</strong>
-              <small id="temperature-sub">Awaiting sensor connection</small>
+              <strong id="temperature">N/A</strong>
+              <small id="temperature-sub">Waiting for sensor data</small>
             </article>
             <article class="metric-card">
               <span class="metric-icon" aria-hidden="true">◒</span>
               <span class="metric-label">Humidity</span>
-              <strong id="humidity">—</strong>
-              <small id="humidity-sub">Awaiting sensor connection</small>
+              <strong id="humidity">N/A</strong>
+              <small id="humidity-sub">Waiting for sensor data</small>
             </article>
             <article class="metric-card">
               <span class="metric-icon" aria-hidden="true">▣</span>
               <span class="metric-label">Smart board</span>
-              <strong id="board">—</strong>
-              <small id="board-sub">Awaiting sensor connection</small>
+              <strong id="board">N/A</strong>
+              <small id="board-sub">Waiting for sensor data</small>
             </article>
           </div>
-          <p class="panel-copy" id="telemetry-notice" style="margin: 0; font-size: 0.74rem;">Note: Live measurements update only when verified payloads arrive from physical sensors. Disconnected hardware displays '—'.</p>
+          <p class="panel-copy" id="telemetry-notice" style="margin: 0; font-size: 0.74rem;">Note: Live measurements update only when verified payloads arrive from physical sensors. Disconnected hardware displays 'N/A' (Waiting for sensor data).</p>
         </section>
 
         <!-- SECTION 1.5: Monitored Rooms Overview (Admin sees all, Operator/User sees assigned) -->
@@ -343,39 +348,382 @@
               <button type="button" disabled>Coming soon</button>
             </div>
           </aside>
+
+          <!-- Interactive Recommendation Testing Console -->
+          <article class="panel" style="grid-column: 1 / -1; margin-top: 14px; padding: 18px 20px; border: 1px solid rgba(62, 228, 255, 0.35); background: rgba(14, 16, 42, 0.85);">
+            <div class="panel-heading" style="margin-bottom: 12px;">
+              <div>
+                <p class="panel-kicker" style="color: var(--cyan);">INTERACTIVE VERIFICATION</p>
+                <h3 style="margin: 0; font-size: 1.05rem;">AI Recommendation & Savings Sandbox</h3>
+              </div>
+              <span class="panel-badge" style="border-color: rgba(62, 228, 255, 0.4); color: var(--ice);">Hypothetical Test</span>
+            </div>
+            <p class="panel-copy" style="margin-bottom: 14px;">Simulate classroom variables to verify rule-governed AI recommendations and calculate immediate baseline vs. optimized electrical power savings.</p>
+            
+            <form id="rec-test-form" class="rec-tester-grid" onsubmit="return false;">
+              <div class="power-field">
+                <label for="test-occupancy">Occupancy</label>
+                <input id="test-occupancy" type="number" min="0" max="60" value="25" />
+              </div>
+              <div class="power-field">
+                <label for="test-temp">Temp (°C)</label>
+                <input id="test-temp" type="number" min="15" max="45" step="0.5" value="27.5" />
+              </div>
+              <div class="power-field">
+                <label for="test-humidity">Humidity (%)</label>
+                <input id="test-humidity" type="number" min="10" max="100" value="60" />
+              </div>
+              <div class="power-field">
+                <label for="test-board">Smart Board</label>
+                <select id="test-board">
+                  <option value="false">Off</option>
+                  <option value="true">In Use (On)</option>
+                </select>
+              </div>
+              <div class="power-field">
+                <label for="test-fans-on">Current Fans On</label>
+                <input id="test-fans-on" type="number" min="0" max="12" value="5" />
+              </div>
+              <div class="power-field">
+                <label for="test-lights-on">Current Lights On</label>
+                <input id="test-lights-on" type="number" min="0" max="24" value="8" />
+              </div>
+              <div>
+                <button id="btn-run-rec-test" type="button" class="power-action-btn" style="width: 100%;">⚡ Test AI Recommendation</button>
+              </div>
+            </form>
+
+            <div id="rec-test-result" class="rec-result-card">
+              <div class="rec-result-header">
+                <div>
+                  <span class="sim-status-pill" style="border-color: rgba(72, 245, 166, 0.5); color: var(--green);">AI REASONING VERIFIED</span>
+                  <strong id="test-result-mode" style="margin-left: 8px; color: #fff;">AI_AUTO</strong>
+                </div>
+                <small id="test-result-notice" style="color: var(--amber);">TEST SCENARIO · SYNTHETIC DATA</small>
+              </div>
+              <p id="test-result-reason" style="font-size: 0.8rem; color: var(--ice); margin: 6px 0 12px;"></p>
+              <div class="rec-result-body">
+                <div class="diag-item">
+                  <span class="diag-label">Suggested Fans</span>
+                  <strong id="test-result-fans">—</strong>
+                </div>
+                <div class="diag-item">
+                  <span class="diag-label">Suggested Lights</span>
+                  <strong id="test-result-lights">—</strong>
+                </div>
+                <div class="diag-item">
+                  <span class="diag-label">Baseline Load</span>
+                  <strong id="test-result-baseline">— W</strong>
+                </div>
+                <div class="diag-item">
+                  <span class="diag-label">Optimized Load</span>
+                  <strong id="test-result-optimized" style="color: var(--green);">— W</strong>
+                </div>
+                <div class="diag-item">
+                  <span class="diag-label">Power Saved</span>
+                  <strong id="test-result-saved" style="color: var(--cyan);">— W</strong>
+                </div>
+                <div class="diag-item">
+                  <span class="diag-label">Monthly Cost Saved</span>
+                  <strong id="test-result-cost" style="color: var(--amber);">₹—</strong>
+                </div>
+              </div>
+            </div>
+          </article>
         </section>
 
-        <!-- SECTION 4: Electrical Power & Energy Savings Audit -->
+        <!-- SECTION 4: Three Clearly Separated Energy Reports -->
         <section class="panel data-panel" id="power-audit">
           <div class="panel-heading">
             <div>
-              <p class="panel-kicker">ELECTRICAL POWER & SAVINGS</p>
-              <h2>Power & Energy Measurement Audit</h2>
+              <p class="panel-kicker">ENERGY AUDITING & SEPARATED REPORTS</p>
+              <h2>Three Separated Energy Reports</h2>
             </div>
-            <span class="panel-badge">Hardware Meter Required</span>
+            <span class="panel-badge" id="power-audit-badge">Three Distinct Models</span>
           </div>
 
-          <div class="power-audit-grid">
-            <div class="power-audit-card">
-              <span class="pac-label">Measured Electrical Power</span>
-              <strong id="audit-measured-power">0.0 W</strong>
-              <small>No hardware CT clamp meter connected</small>
+          <!-- Report Tabs Navigation -->
+          <div class="analytics-tabs" role="tablist" style="margin: 6px 0 18px;">
+            <button id="tab-report-classroom" class="analytics-tab active" role="tab" type="button">
+              🏢 Classroom Simulation Report (Projected)
+            </button>
+            <button id="tab-report-prototype" class="analytics-tab" role="tab" type="button">
+              ⚡ Prototype Energy Report (Estimated)
+            </button>
+            <button id="tab-report-physical" class="analytics-tab" role="tab" type="button">
+              📡 Physical Energy Report (Hardware CT Meter)
+            </button>
+          </div>
+
+          <!-- TAB 1: Classroom Simulation Report View -->
+          <div id="view-report-classroom" style="display: block;">
+            <div class="sim-warning-bar" style="background: rgba(40, 25, 75, 0.45); border-color: rgba(157, 101, 255, 0.45); margin-bottom: 14px;">
+              <span class="sim-warning-icon" aria-hidden="true">🏢</span>
+              <span><strong>SIMULATED / PROJECTED:</strong> Full academic classroom configuration (5 fans × 75W + 8 lights × 28W + 1 smart board × 150W = 749W total connected load). All savings are simulated projections using an explicit rule policy. Never labeled as measured.</span>
             </div>
-            <div class="power-audit-card">
-              <span class="pac-label">Actual Energy Saved</span>
-              <strong id="audit-energy-saved" style="color: var(--amber);">Unavailable</strong>
-              <small>Baseline consumption unmeasured</small>
+
+            <!-- Baseline vs Projected Savings Grid -->
+            <div class="savings-forecast-grid">
+              <div class="forecast-card">
+                <span class="fc-label">Total Connected Load</span>
+                <strong id="cr-connected-load">749 W</strong>
+                <small id="cr-connected-sub">5×75W + 8×28W + 1×150W</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Unmanaged Baseline Load</span>
+                <strong id="cr-baseline-power">749 W</strong>
+                <small id="cr-baseline-sub">All classroom devices active</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Projected Optimized Load</span>
+                <strong id="cr-optimized-power" style="color: var(--cyan);">412 W</strong>
+                <small id="cr-optimized-sub">Policy-governed recommendation</small>
+              </div>
+              <div class="forecast-card highlight">
+                <span class="fc-label">Projected Power Saved</span>
+                <strong id="cr-power-saved" style="color: var(--green);">337 W (45.0%)</strong>
+                <small id="cr-power-saved-sub">Instant load reduction</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Projected Daily Energy Saved</span>
+                <strong id="cr-daily-saved">2.70 kWh</strong>
+                <small id="cr-daily-saved-sub">8 operating hours/day</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Projected Monthly Energy Saved</span>
+                <strong id="cr-monthly-saved">59.40 kWh</strong>
+                <small id="cr-monthly-saved-sub">22 academic classroom days</small>
+              </div>
+              <div class="forecast-card highlight">
+                <span class="fc-label">Projected Monthly Savings</span>
+                <strong id="cr-monthly-cost" style="color: var(--amber);">₹504.90</strong>
+                <small id="cr-monthly-cost-sub">At ₹8.50 per kWh tariff</small>
+              </div>
             </div>
-            <div class="power-audit-card">
-              <span class="pac-label">Financial Cost Saved</span>
-              <strong id="audit-cost-saved" style="color: var(--amber);">Unavailable</strong>
-              <small>Never fabricated without physical meter</small>
+
+            <!-- Documented Policy Box -->
+            <div style="background: rgba(14, 16, 42, 0.7); border: 1px solid rgba(157, 101, 255, 0.3); border-radius: 8px; padding: 14px 16px; margin: 16px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="color: var(--cyan); font-size: 0.85rem;">Documented Classroom Simulation Policy</strong>
+                <span class="panel-badge accent" style="font-size: 0.65rem;">Rule-Governed Logic</span>
+              </div>
+              <p id="cr-policy-summary" style="font-size: 0.76rem; color: var(--ice); margin: 0 0 10px;">Classroom Policy: Thermal comfort & anti-glare visual rules applied.</p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; font-size: 0.72rem; color: var(--muted); line-height: 1.5;">
+                <div style="background: rgba(8, 10, 24, 0.5); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--violet);">
+                  <strong style="color: #fff;">Fan Policy:</strong>
+                  <span id="cr-policy-fan-text">High temp (≥30°C) activates 5 fans. Warm room (26–30°C) scales 2–4 fans by occupancy. Cool room (&lt;22°C) idles fans.</span>
+                </div>
+                <div style="background: rgba(8, 10, 24, 0.5); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--cyan);">
+                  <strong style="color: #fff;">Light Policy:</strong>
+                  <span id="cr-policy-light-text">Smart board ON caps lights to ≤4 to prevent screen glare. High daylight (≥500 lux) keeps 2 perimeter lights. Low light with high occupancy uses all 8 lights.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Classroom Configuration Form -->
+            <div class="power-config-panel">
+              <div class="power-config-header">
+                <div>
+                  <strong style="color: #fff; font-size: 0.88rem;">Classroom Facility Configuration</strong>
+                  <p style="font-size: 0.72rem; color: var(--muted); margin: 2px 0 0;">Configurable classroom fans, lights, smart board rating, tariff, and operating hours. Updating classroom ratings never overwrites prototype ratings.</p>
+                </div>
+              </div>
+              <form id="classroom-config-form" class="power-config-form" onsubmit="return false;">
+                <div class="power-field">
+                  <label for="cr-cfg-fans-qty">Fans (Units)</label>
+                  <input id="cr-cfg-fans-qty" type="number" min="1" max="20" value="5" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-fan-watts">Fan Rating (W)</label>
+                  <input id="cr-cfg-fan-watts" type="number" min="10" max="200" step="1" value="75" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-lights-qty">Lights (Units)</label>
+                  <input id="cr-cfg-lights-qty" type="number" min="1" max="50" value="8" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-light-watts">Light Rating (W)</label>
+                  <input id="cr-cfg-light-watts" type="number" min="5" max="100" step="1" value="28" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-board-watts">Smart Board (W)</label>
+                  <input id="cr-cfg-board-watts" type="number" min="0" max="500" step="5" value="150" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-rate">Tariff (₹/kWh)</label>
+                  <input id="cr-cfg-rate" type="number" min="0.5" max="50" step="0.1" value="8.5" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-hours">Hours/Day</label>
+                  <input id="cr-cfg-hours" type="number" min="1" max="24" value="8" />
+                </div>
+                <div class="power-field">
+                  <label for="cr-cfg-days">Days/Month</label>
+                  <input id="cr-cfg-days" type="number" min="1" max="31" value="22" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button id="btn-save-classroom-cfg" type="button" class="power-action-btn">Save Classroom Configuration</button>
+                  <span id="cr-save-status" style="font-size: 0.72rem; color: var(--green); margin-left: 10px;"></span>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- TAB 2: Prototype Energy Report View -->
+          <div id="view-report-prototype" style="display: none;">
+            <div class="sim-warning-bar" style="background: rgba(30, 45, 65, 0.45); border-color: rgba(62, 228, 255, 0.45); margin-bottom: 14px;">
+              <span class="sim-warning-icon" aria-hidden="true">⚡</span>
+              <span><strong>ESTIMATED (PROTOTYPE BENCH):</strong> Physical bench-scale testbed configuration (1 mini fan default 5W, 1 LED light default 2W, 1 LCD display configurable default 2.5W). LCD is low-power bench scale and strictly never assumed to consume 150W. Labeled as estimates.</span>
+            </div>
+
+            <!-- Prototype Metrics Grid -->
+            <div class="savings-forecast-grid">
+              <div class="forecast-card">
+                <span class="fc-label">Prototype Connected Load</span>
+                <strong id="pr-connected-load">9.5 W</strong>
+                <small id="pr-connected-sub">1 Mini Fan (5W) + 1 LED (2W) + 1 LCD (2.5W)</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Baseline Prototype Power</span>
+                <strong id="pr-baseline-power">9.5 W</strong>
+                <small>All bench devices active</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Estimated Active Power</span>
+                <strong id="pr-active-power" style="color: var(--cyan);">2.5 W</strong>
+                <small id="pr-active-sub">From prototype states</small>
+              </div>
+              <div class="forecast-card highlight">
+                <span class="fc-label">Estimated Power Saved</span>
+                <strong id="pr-power-saved" style="color: var(--green);">7.0 W (73.7%)</strong>
+                <small id="pr-power-saved-sub">Bench load reduction</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Estimated Daily Consumption</span>
+                <strong id="pr-daily-consumption">0.020 kWh</strong>
+                <small id="pr-daily-consumption-sub">8 operating hours/day</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Estimated Monthly Saved</span>
+                <strong id="pr-monthly-saved">1.23 kWh</strong>
+                <small id="pr-monthly-saved-sub">22 testbed operating days</small>
+              </div>
+              <div class="forecast-card highlight">
+                <span class="fc-label">Forecasted Monthly Savings</span>
+                <strong id="pr-monthly-cost" style="color: var(--amber);">₹10.47</strong>
+                <small id="pr-monthly-cost-sub">At ₹8.50 per kWh tariff</small>
+              </div>
+            </div>
+
+            <!-- Prototype Configuration Form -->
+            <div class="power-config-panel">
+              <div class="power-config-header">
+                <div>
+                  <strong style="color: #fff; font-size: 0.88rem;">Prototype Bench Testbed Configuration</strong>
+                  <p style="font-size: 0.72rem; color: var(--muted); margin: 2px 0 0;">Configurable mini fan (5W), LED light (2W), and LCD display wattage. Updating prototype ratings never overwrites classroom ratings.</p>
+                </div>
+              </div>
+              <form id="prototype-config-form" class="power-config-form" onsubmit="return false;">
+                <div class="power-field">
+                  <label for="pr-cfg-fan-qty">Mini Fan (Qty)</label>
+                  <input id="pr-cfg-fan-qty" type="number" min="1" max="5" value="1" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-fan-watts">Mini Fan (W)</label>
+                  <input id="pr-cfg-fan-watts" type="number" min="0.5" max="25" step="0.5" value="5" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-light-qty">LED Light (Qty)</label>
+                  <input id="pr-cfg-light-qty" type="number" min="1" max="10" value="1" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-light-watts">LED Light (W)</label>
+                  <input id="pr-cfg-light-watts" type="number" min="0.1" max="15" step="0.5" value="2" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-lcd-qty">LCD Display (Qty)</label>
+                  <input id="pr-cfg-lcd-qty" type="number" min="1" max="3" value="1" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-lcd-watts">LCD Display (W)</label>
+                  <input id="pr-cfg-lcd-watts" type="number" min="0.2" max="20" step="0.1" value="2.5" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-rate">Tariff (₹/kWh)</label>
+                  <input id="pr-cfg-rate" type="number" min="0.5" max="50" step="0.1" value="8.5" />
+                </div>
+                <div class="power-field">
+                  <label for="pr-cfg-hours">Hours/Day</label>
+                  <input id="pr-cfg-hours" type="number" min="1" max="24" value="8" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button id="btn-save-prototype-cfg" type="button" class="power-action-btn">Save Prototype Configuration</button>
+                  <span id="pr-save-status" style="font-size: 0.72rem; color: var(--green); margin-left: 10px;"></span>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- TAB 3: Physical Energy Report View -->
+          <div id="view-report-physical" style="display: none;">
+            <!-- Prominent Disconnected / Connected Banner -->
+            <div id="ph-status-banner" class="sim-warning-bar" style="background: rgba(45, 25, 20, 0.45); border-color: rgba(255, 190, 89, 0.5); margin-bottom: 14px;">
+              <span class="sim-warning-icon" aria-hidden="true" id="ph-status-icon">📡</span>
+              <span id="ph-status-banner-text"><strong>Physical meter not connected — actual energy measurements unavailable.</strong></span>
+            </div>
+
+            <div class="power-audit-grid">
+              <div class="power-audit-card">
+                <span class="pac-label">Physical Power Meter</span>
+                <strong id="ph-meter-state" style="color: var(--amber);">CT Meter Disconnected</strong>
+                <small id="ph-meter-sub">Physical telemetry port awaiting hardware</small>
+              </div>
+              <div class="power-audit-card">
+                <span class="pac-label">Measured Power (W)</span>
+                <strong id="ph-measured-power">—</strong>
+                <small id="ph-measured-power-sub">Actual measurements unavailable</small>
+              </div>
+              <div class="power-audit-card">
+                <span class="pac-label">Measured Savings</span>
+                <strong id="ph-measured-savings">—</strong>
+                <small id="ph-measured-savings-sub">Zero-fabrication enforced</small>
+              </div>
+            </div>
+
+            <div class="savings-forecast-grid" style="margin-top: 14px;">
+              <div class="forecast-card">
+                <span class="fc-label">Reference Baseline Load</span>
+                <strong id="ph-ref-baseline">749 W</strong>
+                <small>Documented classroom baseline</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Measured Daily Energy</span>
+                <strong id="ph-daily-kwh">—</strong>
+                <small id="ph-daily-kwh-sub">Hardware meter offline</small>
+              </div>
+              <div class="forecast-card">
+                <span class="fc-label">Measured Monthly Energy</span>
+                <strong id="ph-monthly-kwh">—</strong>
+                <small id="ph-monthly-kwh-sub">Hardware meter offline</small>
+              </div>
+              <div class="forecast-card highlight">
+                <span class="fc-label">Measured Monthly Cost Saved</span>
+                <strong id="ph-monthly-cost" style="color: var(--ice);">—</strong>
+                <small id="ph-monthly-cost-sub">Awaiting physical measurements</small>
+              </div>
+            </div>
+
+            <div style="background: rgba(14, 16, 42, 0.7); border: 1px solid rgba(88, 107, 164, 0.3); border-radius: 8px; padding: 14px 16px; margin-top: 14px;">
+              <strong style="color: #fff; font-size: 0.82rem; display: block; margin-bottom: 4px;">Hardware Power Meter Specification & Data Integrity</strong>
+              <p style="font-size: 0.74rem; color: var(--muted); margin: 0; line-height: 1.5;">
+                Compatible with split-core current transformer (CT) clamp meters (e.g., PZEM-004T, SCT-013) reporting on the <code>measured_power_w</code> telemetry channel. When physical CT meter readings are unavailable, AI Energy Guardian never substitutes simulated or modeled values.
+              </p>
             </div>
           </div>
 
           <div class="power-taxonomy-box">
             <strong style="color: #ffffff; font-size: 0.82rem;">Transparent Energy Guardian Measurement Taxonomy</strong>
-            <p style="font-size: 0.74rem; color: var(--muted); margin: 4px 0 0;">AI Energy Guardian clearly distinguishes measured, forecast, calculated, and electrical power metrics:</p>
+            <p style="font-size: 0.74rem; color: var(--muted); margin: 4px 0 0;" id="power-provenance-note">AI Energy Guardian clearly distinguishes measured, forecast, calculated, and electrical power metrics. Physical hardware CT current meter is disconnected.</p>
             <div class="taxonomy-grid">
               <div class="taxonomy-item">
                 <strong style="color: var(--cyan);">Measured (Hardware)</strong>
@@ -391,7 +739,7 @@
               </div>
               <div class="taxonomy-item">
                 <strong style="color: var(--muted);">Power (Electrical)</strong>
-                <p>Requires physical CT current transformer clamp. Never estimated or fabricated.</p>
+                <p>Derived from calibrated appliance wattage ratings. Never fabricated without transparency.</p>
               </div>
             </div>
           </div>

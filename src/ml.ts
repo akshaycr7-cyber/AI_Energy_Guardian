@@ -82,7 +82,7 @@ export function extractStartHourMinute(value: any): [number, number] {
 }
 
 export function validateReadingInput(data: any): void {
-  if (!data || typeof data !== "object") {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new ValidationError("Reading input must be a JSON object");
   }
 
@@ -114,6 +114,38 @@ export function validateReadingInput(data: any): void {
   if (data.cloud_cover_pct !== undefined && data.cloud_cover_pct !== null) {
     if (typeof data.cloud_cover_pct !== "number" || isNaN(data.cloud_cover_pct) || data.cloud_cover_pct < 0 || data.cloud_cover_pct > 100) {
       throw new ValidationError("cloud_cover_pct must be between 0 and 100");
+    }
+  }
+
+  if (data.timestamp !== undefined && data.timestamp !== null) {
+    const parsed = new Date(data.timestamp).getTime();
+    if (isNaN(parsed)) {
+      throw new ValidationError("timestamp must be a valid ISO-8601 date string");
+    }
+  }
+
+  if (data.data_source !== undefined && data.data_source !== null) {
+    const validSources = ["simulated", "esp32", "manual", "imported"];
+    if (typeof data.data_source !== "string" || !validSources.includes(data.data_source.toLowerCase().trim())) {
+      throw new ValidationError(`data_source must be one of: ${validSources.join(", ")}`);
+    }
+  }
+
+  if (data.no_of_lights_on !== undefined && data.no_of_lights_on !== null) {
+    if (typeof data.no_of_lights_on !== "number" || isNaN(data.no_of_lights_on) || data.no_of_lights_on < 0 || data.no_of_lights_on > 100) {
+      throw new ValidationError("no_of_lights_on must be an integer between 0 and 100");
+    }
+  }
+
+  if (data.no_of_fans_on !== undefined && data.no_of_fans_on !== null) {
+    if (typeof data.no_of_fans_on !== "number" || isNaN(data.no_of_fans_on) || data.no_of_fans_on < 0 || data.no_of_fans_on > 100) {
+      throw new ValidationError("no_of_fans_on must be an integer between 0 and 100");
+    }
+  }
+
+  if (data.measured_power_w !== undefined && data.measured_power_w !== null) {
+    if (typeof data.measured_power_w !== "number" || isNaN(data.measured_power_w) || data.measured_power_w < 0) {
+      throw new ValidationError("measured_power_w must be a non-negative number or null");
     }
   }
 }

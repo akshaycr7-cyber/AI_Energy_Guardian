@@ -35,20 +35,35 @@ let lastHealthCheck: SupabaseHealth = {
   lastChecked: new Date().toISOString(),
 };
 
+export function normalizeSupabaseUrl(rawUrl: string): string {
+  try {
+    const trimmed = rawUrl.trim();
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const parsed = new URL(trimmed);
+      return parsed.origin;
+    }
+    return trimmed;
+  } catch {
+    return rawUrl.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+  }
+}
+
 /**
  * Resolves Supabase credentials strictly from environment variables.
  * Prioritizes SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY for authoritative server operations,
  * falling back to SUPABASE_ANON_KEY if service key is omitted.
  */
 export function getSupabaseConfig(): SupabaseConfig | null {
-  const url = process.env.SUPABASE_URL?.trim();
+  const rawUrl = process.env.SUPABASE_URL?.trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)?.trim();
   const anonKey = process.env.SUPABASE_ANON_KEY?.trim();
 
   const key = serviceKey || anonKey;
-  if (!url || !key) {
+  if (!rawUrl || !key) {
     return null;
   }
+
+  const url = normalizeSupabaseUrl(rawUrl);
 
   return {
     url,
@@ -240,8 +255,6 @@ export interface DbReading {
   data_source: string;
   is_physical: boolean;
   timestamp: string;
-  sensor_timestamp?: string | null;
-  evaluated_at?: string | null;
   date: string | null;
   time: string | null;
   lecture: string | null;
@@ -257,10 +270,25 @@ export interface DbReading {
   smart_board_on: boolean;
   measured_power_w: number | null;
   raw_reading: any;
-  reading_json?: any;
   created_at?: string;
 }
 
+export interface DbAiPrediction {
+  id?: string;
+  reading_id: string;
+  occupancy_prediction: string | null;
+  predicted_fan_count: number | null;
+  predicted_light_count: number | null;
+  recommended_fan_count: number | null;
+  recommended_light_count: number | null;
+  ai_mode: string;
+  reason: string | null;
+  model_version: string;
+  status: string;
+  created_at?: string;
+}
+
+// Backward compatibility aliases if needed
 export interface DbRawPrediction {
   id: string;
   reading_id: string;
@@ -268,18 +296,7 @@ export interface DbRawPrediction {
   predicted_fan_count: number | null;
   predicted_light_count: number | null;
   model_version: string;
-  prediction_json: any;
-  created_at: string;
-}
-
-export interface DbAiPrediction {
-  id?: string;
-  reading_id: string;
-  recommended_fan_count: number | null;
-  recommended_light_count: number | null;
-  ai_mode: string;
-  reason: string | null;
-  status: string;
+  prediction_json?: any;
   created_at?: string;
 }
 
@@ -289,9 +306,9 @@ export interface DbAiDecision {
   prediction_id: string;
   recommended_fan_count: number | null;
   recommended_light_count: number | null;
-  decision_json: any;
-  sensor_data_status: string;
-  created_at: string;
+  decision_json?: any;
+  sensor_data_status?: string;
+  created_at?: string;
 }
 
 export interface DbAuditLog {

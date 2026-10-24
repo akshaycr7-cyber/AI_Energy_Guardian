@@ -13,11 +13,28 @@ import {
 import { history, sensorDataStatus } from "./src/history.js";
 import {
   evaluateAndStoreReading,
+  evaluateAndStoreReadingAsync,
   generateReading,
   runSimulatorStep,
   getSimulatorStatus,
   setContinuousSimulator,
 } from "./src/simulator.js";
+import {
+  getApplianceConfig,
+  updateApplianceConfig,
+  calculatePowerAndSavings,
+  getPrototypeConfig,
+  updatePrototypeConfig,
+  calculatePrototypeEnergyReport,
+  getClassroomConfig,
+  updateClassroomConfig,
+  calculateClassroomConnectedLoad,
+  evaluateClassroomSimulationPolicy,
+  calculateClassroomSimulationReport,
+  getPhysicalMeterConfig,
+  updatePhysicalMeterConfig,
+  getPhysicalEnergyReport,
+} from "./src/power.js";
 
 import {
   userStore,
@@ -79,13 +96,13 @@ app.get("/", (req: Request, res: Response) => {
 // ----------------- Authentication Routes -----------------
 
 // POST /api/auth/login
-app.post("/api/auth/login", (req: Request, res: Response) => {
+app.post("/api/auth/login", async (req: Request, res: Response) => {
   const { email, password, rememberMe } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ detail: "Email and password are required." });
   }
 
-  const user = userStore.findByEmail(String(email));
+  const user = await userStore.findByEmailAsync(String(email));
   if (!user || !verifyPassword(String(password), user.passwordHash, user.salt)) {
     return res.status(401).json({ detail: "Invalid email or password." });
   }
@@ -107,7 +124,7 @@ app.post("/api/auth/login", (req: Request, res: Response) => {
 });
 
 // POST /api/auth/register
-app.post("/api/auth/register", (req: Request, res: Response) => {
+app.post("/api/auth/register", async (req: Request, res: Response) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ detail: "Email and password are required." });
@@ -123,7 +140,7 @@ app.post("/api/auth/register", (req: Request, res: Response) => {
   }
 
   try {
-    const user = userStore.createUser(emailStr, String(password));
+    const user = await userStore.createUserAsync(emailStr, String(password));
     const token = signToken({ sub: user.id, email: user.email, role: user.role });
     res.status(201).json({
       token,
@@ -180,12 +197,13 @@ app.post("/api/auth/logout", (_req: Request, res: Response) => {
 // ----------------- Administrative & Operator Routes -----------------
 
 // GET /api/admin/users
-app.get("/api/admin/users", requireAdmin, (_req: AuthenticatedRequest, res: Response) => {
-  res.json({ users: userStore.listUsers() });
+app.get("/api/admin/users", requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  const users = await userStore.listUsersAsync();
+  res.json({ users });
 });
 
 // PATCH /api/admin/users/:id/role
-app.patch("/api/admin/users/:id/role", requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+app.patch("/api/admin/users/:id/role", requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   const userId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { role } = req.body || {};
   const validRoles = ["admin", "operator", "occupant", "user"];
@@ -194,7 +212,7 @@ app.patch("/api/admin/users/:id/role", requireAdmin, (req: AuthenticatedRequest,
   }
 
   try {
-    const updated = userStore.updateRole(userId, role as UserRole, {
+    const updated = await userStore.updateRoleAsync(userId, role as UserRole, {
       id: req.user?.id || "admin",
       email: req.user?.email || "admin@energyguardian.ai",
     });
@@ -328,8 +346,8 @@ app.get("/api/admin/ml-status", requireAdmin, (_req: AuthenticatedRequest, res: 
 app.get("/api/admin/settings", requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   const dbHealth = isSupabaseConfigured() ? await checkSupabaseHealth() : getLastSupabaseHealth();
   res.json({
-    stale_threshold_seconds: 120,
-    configured_device_id: "ESP32_LAB_CLASSROOM_01",
+    stale_threshold_seconds: history.staleThresholdSeconds,
+    configured_device_id: history.configuredDeviceId,
     storage_engine: history.storageName,
     storage_mode: history.storageMode,
     database_connected: dbHealth.connected,
@@ -337,6 +355,22 @@ app.get("/api/admin/settings", requireAdmin, async (_req: AuthenticatedRequest, 
     power_meter_required: true,
     telemetry_refresh_interval_ms: 10000,
     allowed_roles: ["admin", "operator", "occupant"],
+  });
+});
+
+// PATCH /api/admin/settings - Update system settings
+app.patch("/api/admin/settings", requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  const { stale_threshold_seconds } = req.body || {};
+  if (stale_threshold_seconds !== undefined) {
+    const parsed = parseInt(String(stale_threshold_seconds), 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      history.setStaleThreshold(parsed);
+    }
+  }
+  res.json({
+    message: "Settings updated successfully.",
+    stale_threshold_seconds: history.staleThresholdSeconds,
+    configured_device_id: history.configuredDeviceId,
   });
 });
 
@@ -495,38 +529,49 @@ function determineDeviceSource(req: Request): {
   source: "esp32" | "simulated" | "manual" | "imported";
   isPhysical: boolean;
   deviceId?: string;
+  isAuthenticated: boolean;
 } {
-  const reqSource = (req.body?.data_source || "").toLowerCase();
+  const reqSource = (req.body?.data_source || "").toLowerCase().trim();
   const headerDeviceId = (req.headers["x-device-id"] as string) || (req.body?.device_id as string);
   const headerSecret = (req.headers["x-device-secret"] as string) || (req.headers["x-sensor-key"] as string);
-  const headerSource = ((req.headers["x-sensor-source"] as string) || "").toLowerCase();
+  const headerSource = ((req.headers["x-sensor-source"] as string) || "").toLowerCase().trim();
 
   // Explicit simulation requests are always simulated
   if (reqSource === "simulated" || headerSource === "simulated") {
-    return { source: "simulated", isPhysical: false };
+    return { source: "simulated", isPhysical: false, isAuthenticated: true };
   }
   if (reqSource === "imported" || headerSource === "imported") {
-    return { source: "imported", isPhysical: false };
+    return { source: "imported", isPhysical: false, isAuthenticated: true };
   }
 
   // Check if claimed to be ESP32 physical
   const claimsPhysical = reqSource === "esp32" || headerSource === "esp32" || headerSource === "hardware";
 
   if (claimsPhysical) {
-    // Authenticated device ingestion:
-    // Requires valid device ID or valid secret token, OR matching development key
-    const hasValidDevice = headerDeviceId && KNOWN_DEVICE_IDS.has(headerDeviceId);
-    const hasValidSecret = headerSecret && headerSecret === ESP32_HARDWARE_SECRET;
+    const hasValidDevice = Boolean(headerDeviceId && KNOWN_DEVICE_IDS.has(headerDeviceId));
+    const hasValidSecret = Boolean(headerSecret && headerSecret === ESP32_HARDWARE_SECRET);
 
-    // For backwards compatibility with automated test suite and standard device ingestion:
-    // If device header is provided or secret is present, OR in local test environment with explicit esp32 header:
-    if (hasValidDevice || hasValidSecret || headerSource === "esp32" || headerSource === "hardware" || reqSource === "esp32") {
-      const deviceId = headerDeviceId || history.configuredDeviceId;
-      return { source: "esp32", isPhysical: true, deviceId };
+    // In local dev/test or production:
+    // Requires a known device ID. If secret is provided it must match ESP32_HARDWARE_SECRET.
+    // If device ID is unknown or secret is wrong, authentication fails.
+    if (hasValidDevice && (!headerSecret || hasValidSecret)) {
+      return {
+        source: "esp32",
+        isPhysical: true,
+        deviceId: headerDeviceId,
+        isAuthenticated: true,
+      };
     }
+
+    return {
+      source: "manual",
+      isPhysical: false,
+      deviceId: headerDeviceId,
+      isAuthenticated: false,
+    };
   }
 
-  return { source: "manual", isPhysical: false };
+  return { source: "manual", isPhysical: false, isAuthenticated: true };
 }
 
 // Reset history (Admin protected, or permitted for isolated testing)
@@ -536,18 +581,38 @@ app.delete("/history", (req: Request, res: Response) => {
   res.json({ message: "History cleared.", sensor_health: history.getSensorHealth() });
 });
 
+// Heartbeat endpoint for physical ESP32 nodes
+app.post(["/readings/heartbeat", "/api/telemetry/heartbeat"], (req: Request, res: Response) => {
+  const authResult = determineDeviceSource(req);
+  if (!authResult.isAuthenticated || !authResult.isPhysical) {
+    return res.status(401).json({
+      detail: "Unauthenticated device heartbeat: Valid device ID (x-device-id) and secret required.",
+      error_code: "ESP32_UNAUTHENTICATED",
+    });
+  }
+  const deviceId = authResult.deviceId || history.configuredDeviceId;
+  history.recordHeartbeat(deviceId);
+  res.json({
+    status: "ok",
+    message: "Heartbeat acknowledged.",
+    timestamp: new Date().toISOString(),
+    configured_device_id: deviceId,
+    stale_threshold_seconds: history.staleThresholdSeconds,
+  });
+});
+
 // Evaluate reading
-app.post("/evaluate", (req: Request, res: Response, next: NextFunction) => {
+app.post("/evaluate", async (req: Request, res: Response, next: NextFunction) => {
   try {
     validateReadingInput(req.body);
-    const { source, deviceId } = determineDeviceSource(req);
+    const authResult = determineDeviceSource(req);
     const reading: ClassroomReadingInput = {
       ...req.body,
       timestamp: req.body.timestamp || new Date().toISOString(),
-      data_source: source,
+      data_source: authResult.source,
       measured_power_w: req.body.measured_power_w !== undefined ? req.body.measured_power_w : null,
     };
-    const result = evaluateAndStoreReading(reading);
+    const result = await evaluateAndStoreReadingAsync(reading);
     res.status(201).json(result);
   } catch (err) {
     next(err);
@@ -555,26 +620,38 @@ app.post("/evaluate", (req: Request, res: Response, next: NextFunction) => {
 });
 
 // Readings endpoints
-app.post("/readings", (req: Request, res: Response, next: NextFunction) => {
+app.post("/readings", async (req: Request, res: Response, next: NextFunction) => {
   try {
     validateReadingInput(req.body);
-    const { source, isPhysical, deviceId } = determineDeviceSource(req);
+    const authResult = determineDeviceSource(req);
+    const claimsPhysical = (req.body?.data_source || "").toLowerCase().trim() === "esp32" ||
+      ((req.headers["x-sensor-source"] as string) || "").toLowerCase().trim() === "esp32";
+
+    if (claimsPhysical && !authResult.isAuthenticated) {
+      return res.status(401).json({
+        detail: "Unauthenticated device: Telemetry claiming physical ESP32 source must provide valid device authentication headers (x-device-id / secret).",
+        error_code: "ESP32_UNAUTHENTICATED",
+      });
+    }
+
     const reading: ClassroomReadingInput = {
       ...req.body,
       timestamp: req.body.timestamp || new Date().toISOString(),
-      data_source: source,
+      data_source: authResult.source,
       measured_power_w: req.body.measured_power_w !== undefined ? req.body.measured_power_w : null,
     };
-    const result = evaluateAndStoreReading(reading);
-    if (isPhysical) {
-      history.recordSensorEvent(`Physical telemetry ingested from ${deviceId || "ESP32"}`, "info");
+    const result = await evaluateAndStoreReadingAsync(reading);
+    if (authResult.isPhysical && authResult.isAuthenticated) {
+      history.recordPhysicalTelemetry(result, authResult.deviceId || history.configuredDeviceId);
+      history.recordSensorEvent(`Physical telemetry ingested from ${authResult.deviceId || "ESP32"}`, "info");
     }
     res.status(201).json({
       message: "Reading stored",
       id: result.id,
       data_source: reading.data_source,
-      is_physical: isPhysical,
-      device_id: deviceId,
+      telemetry_source: authResult.isPhysical ? "PHYSICAL_ESP32" : (reading.data_source === "simulated" ? "SIMULATOR" : "HISTORICAL"),
+      is_physical: authResult.isPhysical,
+      device_id: authResult.deviceId,
     });
   } catch (err) {
     next(err);
@@ -588,15 +665,19 @@ app.get("/readings/latest", (_req: Request, res: Response) => {
     return res.status(404).json({ detail: "No readings found" });
   }
   const item = recent[0];
-  const isPhysical = item.reading.data_source === "esp32";
-  const ageMs = Date.now() - new Date(item.timestamp).getTime();
-  const isLive = isPhysical && ageMs <= history.staleThresholdSeconds * 1000;
+  const isPhysical = (item.reading.data_source || "").toLowerCase() === "esp32" && !item.sensor_data_status?.isHistorical;
+  const sensorHealth = history.getSensorHealth();
+  const isLive = isPhysical && sensorHealth.physicalSensorConnected;
+  const telemetrySource = isPhysical ? (isLive ? "PHYSICAL_ESP32" : "STALE_PHYSICAL") : (item.sensor_data_status?.isHistorical ? "HISTORICAL" : (item.reading.data_source === "simulated" ? "SIMULATOR" : "HISTORICAL"));
+
   res.json({
     id: item.id,
     is_physical: isPhysical,
     is_live: isLive,
+    telemetry_source: telemetrySource,
     data_source: item.reading.data_source || "unknown",
     timestamp: item.timestamp,
+    evaluated_at: item.evaluated_at || item.timestamp,
     ...item.reading,
   });
 });
@@ -604,21 +685,26 @@ app.get("/readings/latest", (_req: Request, res: Response) => {
 // Get latest physical reading specifically
 app.get("/readings/latest/physical", (_req: Request, res: Response) => {
   const physical = history.getLatestPhysical();
-  if (!physical) {
+  const sensorHealth = history.getSensorHealth();
+
+  if (!physical || sensorHealth.status === "disconnected" || sensorHealth.status === "simulated_only") {
     return res.status(404).json({
-      detail: "Awaiting sensor connection. No physical ESP32 data received yet.",
+      detail: "Physical sensors are not connected. Awaiting sensor connection. Live readings will appear after the ESP32 and sensors are connected and valid telemetry is received.",
       physical_sensor_connected: false,
+      status: "disconnected",
     });
   }
-  const ageMs = Date.now() - new Date(physical.timestamp).getTime();
-  const isLive = ageMs <= history.staleThresholdSeconds * 1000;
+
+  const isLive = sensorHealth.physicalSensorConnected;
   res.json({
     id: physical.id,
     is_physical: true,
     is_live: isLive,
-    age_seconds: Math.round(ageMs / 1000),
+    age_seconds: sensorHealth.physicalAgeSeconds ?? 0,
+    telemetry_source: "PHYSICAL_ESP32",
     data_source: "esp32",
     timestamp: physical.timestamp,
+    evaluated_at: physical.evaluated_at || physical.timestamp,
     ...physical.reading,
   });
 });
@@ -735,15 +821,272 @@ app.get("/simulator/status", (_req: Request, res: Response) => {
   res.json(getSimulatorStatus());
 });
 
+// ----------------- Power & Wattage Configuration and Savings Routes -----------------
+
+// GET /api/power/config: returns appliance wattage specifications
+app.get("/api/power/config", (_req: Request, res: Response) => {
+  res.json({
+    config: getApplianceConfig(),
+    notes: "Appliance wattage specifications for bench mini fan, LED lights, and full classroom loads.",
+  });
+});
+
+// PATCH /api/power/config: updates appliance wattage ratings (restricted if authenticated as occupant)
+app.patch("/api/power/config", optionalAuth, (req: AuthenticatedRequest, res: Response) => {
+  if (req.user && req.user.role === "occupant") {
+    return res.status(403).json({ detail: "Appliance wattage configuration requires Operator or Admin role." });
+  }
+  const updated = updateApplianceConfig(req.body || {});
+  res.json({
+    message: "Appliance wattage configuration updated successfully.",
+    config: updated,
+  });
+});
+
+// GET /api/power/summary: computes baseline vs AI power savings from latest observation
+app.get("/api/power/summary", (req: Request, res: Response) => {
+  const recent = history.recent(1);
+  const latest = recent.length ? recent[0] : null;
+
+  const isPhysical = latest ? latest.reading.data_source === "esp32" : false;
+  const dataSource = latest ? latest.reading.data_source || "simulated" : "no_data";
+  const smartBoardOn = latest ? Boolean(latest.reading.smart_board_on) : false;
+
+  const recommendedFans = latest?.decision?.recommended_fan_count ?? 2;
+  const recommendedLights = latest?.decision?.recommended_light_count ?? 2;
+  const actualFans = latest?.reading?.no_of_fans_on;
+  const actualLights = latest?.reading?.no_of_lights_on;
+
+  const summary = calculatePowerAndSavings(
+    recommendedFans,
+    recommendedLights,
+    smartBoardOn,
+    actualFans,
+    actualLights,
+    dataSource,
+    isPhysical
+  );
+
+  const prototypeReport = calculatePrototypeEnergyReport({
+    mini_fan_on: actualFans !== undefined && actualFans !== null ? actualFans > 0 : false,
+    led_light_on: actualLights !== undefined && actualLights !== null ? actualLights > 0 : false,
+    lcd_display_on: true,
+  });
+
+  const classroomReport = calculateClassroomSimulationReport({
+    occupancy: latest?.reading?.occupancy ?? 25,
+    temperature_c: latest?.reading?.temperature_c ?? 26.5,
+    humidity_pct: latest?.reading?.humidity_pct ?? 55,
+    ambient_light_lux: 350,
+    smart_board_on: smartBoardOn,
+    actual_fans_on: actualFans,
+    actual_lights_on: actualLights,
+  });
+
+  const physicalLatest = history.getLatestPhysical();
+  const physicalReport = getPhysicalEnergyReport(
+    physicalLatest && physicalLatest.reading.measured_power_w !== null
+      ? {
+          measured_power_w: physicalLatest.reading.measured_power_w,
+          device_id: history.configuredDeviceId,
+          is_live: true,
+        }
+      : null
+  );
+
+  res.json({
+    power_summary: summary,
+    appliance_config: getApplianceConfig(),
+    prototype_report: prototypeReport,
+    classroom_report: classroomReport,
+    physical_report: physicalReport,
+    latest_reading_id: latest?.id || null,
+    is_live_physical: isPhysical,
+    has_physical_meter: physicalReport.meter_connected,
+    physical_meter_notice: physicalReport.status_message,
+  });
+});
+
+// ----------------- Three Separated Energy Reports Routes -----------------
+
+// 1. Prototype Energy Report (Bench Testbed)
+app.get("/api/reports/prototype", (_req: Request, res: Response) => {
+  const recent = history.recent(1);
+  const latest = recent.length ? recent[0] : null;
+  const isPhysical = latest?.reading?.data_source === "esp32";
+
+  const report = calculatePrototypeEnergyReport({
+    mini_fan_on: latest?.reading?.no_of_fans_on !== undefined && latest.reading.no_of_fans_on !== null ? latest.reading.no_of_fans_on > 0 : false,
+    led_light_on: latest?.reading?.no_of_lights_on !== undefined && latest.reading.no_of_lights_on !== null ? latest.reading.no_of_lights_on > 0 : false,
+    lcd_display_on: true,
+  });
+
+  res.json({
+    report,
+    config: getPrototypeConfig(),
+    is_physical_reading: isPhysical,
+    label: "ESTIMATED (PROTOTYPE BENCH)",
+    notes: "Prototype bench energy calculations based on mini fan, LED, and configurable LCD display. Labeled as estimates.",
+  });
+});
+
+app.patch("/api/reports/prototype/config", optionalAuth, (req: AuthenticatedRequest, res: Response) => {
+  if (req.user && req.user.role === "occupant") {
+    return res.status(403).json({ detail: "Prototype configuration requires Operator or Admin role." });
+  }
+  const updated = updatePrototypeConfig(req.body || {});
+  res.json({
+    message: "Prototype configuration updated successfully.",
+    config: updated,
+  });
+});
+
+// 2. Classroom Simulation Report (Full Facility Model)
+app.get("/api/reports/classroom", (_req: Request, res: Response) => {
+  const recent = history.recent(1);
+  const latest = recent.length ? recent[0] : null;
+  const reading = latest?.reading;
+
+  const report = calculateClassroomSimulationReport({
+    occupancy: reading?.occupancy ?? 25,
+    temperature_c: reading?.temperature_c ?? 26.5,
+    humidity_pct: reading?.humidity_pct ?? 55,
+    ambient_light_lux: 350,
+    smart_board_on: Boolean(reading?.smart_board_on),
+    actual_fans_on: reading?.no_of_fans_on,
+    actual_lights_on: reading?.no_of_lights_on,
+  });
+
+  res.json({
+    report,
+    config: getClassroomConfig(),
+    connected_load_w: calculateClassroomConnectedLoad(),
+    label: "SIMULATED / PROJECTED",
+    notes: "Classroom simulation report based on explicit rule-governed simulation policy.",
+  });
+});
+
+app.patch("/api/reports/classroom/config", optionalAuth, (req: AuthenticatedRequest, res: Response) => {
+  if (req.user && req.user.role === "occupant") {
+    return res.status(403).json({ detail: "Classroom configuration requires Operator or Admin role." });
+  }
+  const updated = updateClassroomConfig(req.body || {});
+  res.json({
+    message: "Classroom configuration updated successfully.",
+    config: updated,
+    connected_load_w: calculateClassroomConnectedLoad(updated),
+  });
+});
+
+// 3. Physical Energy Report (Hardware CT Meter)
+app.get("/api/reports/physical", (_req: Request, res: Response) => {
+  const physical = history.getLatestPhysical();
+  const hasHardwareReading =
+    physical !== null &&
+    physical !== undefined &&
+    physical.reading?.measured_power_w !== null &&
+    physical.reading?.measured_power_w !== undefined;
+
+  const report = getPhysicalEnergyReport(
+    hasHardwareReading
+      ? {
+          measured_power_w: physical.reading.measured_power_w,
+          device_id: history.configuredDeviceId,
+          is_live: true,
+        }
+      : null
+  );
+
+  res.json({
+    report,
+    config: getPhysicalMeterConfig(),
+    status_message: report.status_message,
+    meter_connected: report.meter_connected,
+  });
+});
+
+
+// POST /api/recommendation/test: interactive recommendation testing sandbox for operators and occupants
+app.post("/api/recommendation/test", (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body || {};
+    const input: ClassroomReadingInput = {
+      occupancy: Number(body.occupancy ?? 25),
+      temperature_c: Number(body.temperature_c ?? 26.5),
+      humidity_pct: Number(body.humidity_pct ?? 55),
+      smart_board_on: Boolean(body.smart_board_on),
+      no_of_fans_on: body.no_of_fans_on !== undefined ? Number(body.no_of_fans_on) : undefined,
+      no_of_lights_on: body.no_of_lights_on !== undefined ? Number(body.no_of_lights_on) : undefined,
+      timestamp: new Date().toISOString(),
+      data_source: "simulated",
+    };
+
+    validateReadingInput(input);
+    const prediction = predictAll(input);
+    const recommendation = recommendStates(input, prediction);
+
+    const powerBreakdown = calculatePowerAndSavings(
+      recommendation.fan_count,
+      recommendation.light_count,
+      Boolean(input.smart_board_on),
+      input.no_of_fans_on,
+      input.no_of_lights_on,
+      "interactive_test",
+      false
+    );
+
+    res.json({
+      scenario_label: "INTERACTIVE TEST SCENARIO",
+      is_physical: false,
+      input,
+      prediction,
+      recommendation,
+      power_breakdown: powerBreakdown,
+      appliance_config: getApplianceConfig(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 // Error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ValidationError) {
     return res.status(err.statusCode).json({ detail: err.message });
   }
-  console.error("Unhandled error:", err);
+
+  // Log full diagnostic error on server for administrator review
+  console.error("Unhandled server error:", err);
+
+  const rawMessage = String(err?.message || "");
+  const isDatabaseInternal =
+    /relation|column|constraint|violates|not-null|foreign key|syntax error|table "public\.|supabase|postgres|pgrst/i.test(rawMessage);
+
+  if (isDatabaseInternal) {
+    return res.status(503).json({
+      detail: "Database persistence error encountered. Operation logged for administrator review.",
+    });
+  }
+
   res.status(500).json({ detail: err?.message || "Internal server error" });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`AI Energy Guardian server running at http://${HOST}:${PORT}`);
-});
+async function startServer() {
+  if (isSupabaseConfigured()) {
+    try {
+      await Promise.all([
+        userStore.syncWithDatabase(),
+        history.syncWithDatabase(),
+      ]);
+    } catch (err: any) {
+      console.warn("[Server] Startup database hydration notice:", err?.message || err);
+    }
+  }
+
+  app.listen(PORT, HOST, () => {
+    console.log(`AI Energy Guardian server running at http://${HOST}:${PORT}`);
+  });
+}
+
+startServer();
